@@ -12,29 +12,18 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
  */
-package io.helidon.tracing.rest.client;
+package io.helidon.webclient.spi;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import io.helidon.webclient.ClientServiceRequest;
-import io.helidon.webclient.spi.ClientService;
 
 /**
- * TODO javadoc.
+ * Extension that can modify outgoing request.
+ * TODO maybe also incoming response
  */
-public class ClientTracing implements ClientService {
-    public static final String PARENT_SPAN = "io.helidon.rest.client.tracing.parentSpan";
-    public static final String SPAN_NAME = "io.helidon.rest.client.tracing.spanName";
-
-    public static ClientTracing create() {
-        return null;
-    }
-
-    @Override
-    public CompletionStage<ClientServiceRequest> apply(ClientServiceRequest request) {
-        return CompletableFuture.completedFuture(request);
-    }
+@FunctionalInterface
+public interface ClientService {
+    CompletionStage<ClientServiceRequest> apply(ClientServiceRequest request);
 }

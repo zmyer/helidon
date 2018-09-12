@@ -24,15 +24,15 @@ import java.util.logging.Logger;
 
 import io.helidon.common.CollectionsHelper;
 import io.helidon.common.http.ContextualRegistry;
-import io.helidon.rest.client.ClientRequestHeaders;
-import io.helidon.rest.client.ClientServiceRequest;
-import io.helidon.rest.client.spi.ClientService;
 import io.helidon.security.EndpointConfig;
 import io.helidon.security.OutboundSecurityClientBuilder;
 import io.helidon.security.OutboundSecurityResponse;
 import io.helidon.security.Security;
 import io.helidon.security.SecurityContext;
 import io.helidon.security.SecurityEnvironment;
+import io.helidon.webclient.ClientRequestHeaders;
+import io.helidon.webclient.ClientServiceRequest;
+import io.helidon.webclient.spi.ClientService;
 
 import io.opentracing.Span;
 import io.opentracing.SpanContext;

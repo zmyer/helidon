@@ -20,8 +20,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import io.helidon.metrics.RegistryFactory;
-import io.helidon.rest.client.ClientServiceRequest;
-import io.helidon.rest.client.spi.ClientService;
+import io.helidon.webclient.ClientServiceRequest;
+import io.helidon.webclient.spi.ClientService;
 
 import org.eclipse.microprofile.metrics.Counter;
 import org.eclipse.microprofile.metrics.MetricRegistry;

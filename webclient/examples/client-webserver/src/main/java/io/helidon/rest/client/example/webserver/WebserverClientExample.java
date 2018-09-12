@@ -3,30 +3,38 @@
  */
 package io.helidon.rest.client.example.webserver;
 
+import java.nio.charset.StandardCharsets;
+
+import javax.json.Json;
+import javax.json.JsonObject;
+
 import io.helidon.common.OptionalHelper;
 import io.helidon.common.http.Http;
 import io.helidon.config.Config;
+import io.helidon.media.json.processing.client.ClientJsonSupport;
 import io.helidon.metrics.rest.client.ClientMetrics;
-import io.helidon.rest.client.ClientException;
-import io.helidon.rest.client.ClientResponse;
-import io.helidon.rest.client.Proxy;
-import io.helidon.rest.client.RestClient;
 import io.helidon.security.rest.client.ClientSecurity;
 import io.helidon.tracing.rest.client.ClientTracing;
+import io.helidon.webclient.ClientException;
+import io.helidon.webclient.ClientResponse;
+import io.helidon.webclient.Proxy;
+import io.helidon.webclient.RestClient;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.WebServer;
-import io.helidon.webserver.json.JsonSupport;
 
 /**
  * TODO javadoc.
  */
 public class WebserverClientExample {
     private static RestClient restClient;
+    private static ClientJsonSupport jsonSupport;
 
     public static void main(String[] args) {
         Config config = Config.create();
+
+        jsonSupport = ClientJsonSupport.create();
 
         restClient = RestClient.builder()
                 // default configuration of client metrics
@@ -38,9 +46,7 @@ public class WebserverClientExample {
                 // default configuration of client security - invokes outbound provider(s) and updates headers
                 // REQUIRES: security and security context configured on request context (injected by WebSecurity)
                 .register(ClientSecurity.create())
-                // TODO now using server specific implementation - this would require changes to the handler implementation
-                // TODO so it is supported both by client and by server
-                .register(JsonSupport.get())
+                .register(jsonSupport)
                 .proxy(Proxy.create(config))
                 .build();
 
@@ -54,21 +60,22 @@ public class WebserverClientExample {
     }
 
     private static void put(ServerRequest req, ServerResponse res) {
+        JsonObject object = Json.createObjectBuilder()
+                .add("key", "value")
+                .add("anotherKey", 42)
+                .build();
+
         restClient.put(req.context(), "http://www.google.com")
                 // request specific handler
-                .register(JsonSupport.get())
+                .register(jsonSupport.derive(StandardCharsets.ISO_8859_1))
                 .build()
-                .send(req.content())
+                .send(object)
                 .thenCompose(res::send)
                 .thenAccept(aResponse -> {
                 })
                 .exceptionally(throwable -> handleException(res, throwable));
     }
 
-    // TODO how about this use case
-    // TODO requires that server depends on client
-    // TODO what about - we need to change a bit (header, cookie etc.)
-    // e.g. to implement a side car
     private static void proxyResponse(ServerRequest req, ServerResponse res) {
         restClient.get(req.context(), "http://lll")
                 .build()
@@ -84,6 +91,7 @@ public class WebserverClientExample {
         restClient.get(req.context(), "http://LLLdaůsf")
                 .queryParams(req.queryParams())
                 .headers(req.headers())
+                .build()
                 .send(req.content())
                 .thenAccept(clientResponse -> {
                     res.headers().add("CUSTOM_RESPONSE", "HEADER");
@@ -117,6 +125,7 @@ public class WebserverClientExample {
 
     private static void hello(ServerRequest req, ServerResponse res) {
         restClient.get(req.context(), "http://www.google.com")
+                .build()
                 .send()
                 .thenApply(ClientResponse::content)
                 .thenAccept(res::send)

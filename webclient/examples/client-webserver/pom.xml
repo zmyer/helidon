@@ -18,18 +18,13 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.helidon.webserver</groupId>
-            <artifactId>helidon-webserver-json</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>io.helidon.webclient</groupId>
             <artifactId>helidon-webclient</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.helidon.media</groupId>
-            <artifactId>helidon-media-json-processing</artifactId>
+            <artifactId>helidon-media-json-processing-client</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

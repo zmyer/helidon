@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.helidon.webserver.json;
+package io.helidon.media.json.processing.server;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -43,14 +43,13 @@ import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.Service;
 import io.helidon.webserver.WebServer;
 
-
 /**
  * It provides contains JSON-P ({@code javax.json}) support for {@link WebServer WebServer}'s
  * {@link Routing}. It is intended to provide readers and writers for {@code javax.json} objects such
  * as {@link javax.json.JsonObject JsonObject} or {@link javax.json.JsonArray JsonArray}. If registered on the
  * {@code Web Server} {@link Routing}, then all {@link Handler Handlers} can use
  * {@code ServerRequest.}{@link ServerRequest#content() content()}{@code .}
- * {@link Content#as(java.lang.Class) as(...)} and
+ * {@link Content#as(Class) as(...)} and
  * {@code ServerResponse.}{@link ServerResponse#send(Object) send()}
  * with {@link JsonStructure JSON} objects.
  *
@@ -80,14 +79,6 @@ import io.helidon.webserver.WebServer;
  * @see JsonWriter
  */
 public final class JsonSupport implements Service, Handler {
-    /**
-     * JSONP (JSON with Pending) can have this weird type.
-     */
-    private static final MediaType APPLICATION_JAVASCRIPT = new MediaType("application", "javascript");
-    /**
-     * And the corresponding (obsolete, yet widely supported) text type.
-     */
-    private static final MediaType TEXT_JAVASCRIPT = new MediaType("text", "javascript");
 
     /**
      * A singleton holder for JsonSupport with default (empty) configuration.
@@ -133,7 +124,7 @@ public final class JsonSupport implements Service, Handler {
      * It calls {@code ServerRequest.}{@link ServerRequest#next() next()} method to invoke following handlers with
      * particular business logic.
      *
-     * @param request a server request
+     * @param request  a server request
      * @param response a server response
      * @see Routing
      */
@@ -141,10 +132,10 @@ public final class JsonSupport implements Service, Handler {
     public void accept(ServerRequest request, ServerResponse response) {
         // Reader
         request.content()
-               .registerReader(JsonStructure.class::isAssignableFrom, (publisher, type) -> {
-                   Charset charset = determineCharset(request.headers());
-                   return reader(charset).apply(publisher);
-               });
+                .registerReader(JsonStructure.class::isAssignableFrom, (publisher, type) -> {
+                    Charset charset = determineCharset(request.headers());
+                    return reader(charset).apply(publisher);
+                });
         // Writer
         response.registerWriter(json -> (json instanceof JsonStructure) && testOrSetContentType(request, response),
                                 json -> {
@@ -159,7 +150,7 @@ public final class JsonSupport implements Service, Handler {
      * <p>
      * If response has no {@code Content-Type} header then it is set to the response.
      *
-     * @param request a server request
+     * @param request  a server request
      * @param response a server response
      * @return {@code true} if JSON writer can be used
      */
@@ -177,10 +168,10 @@ public final class JsonSupport implements Service, Handler {
                         .map(type -> {
                             if (type.test(MediaType.APPLICATION_JSON)) {
                                 return MediaType.APPLICATION_JSON;
-                            } else if (type.test(APPLICATION_JAVASCRIPT)) {
-                                return APPLICATION_JAVASCRIPT;
-                            } else if (type.test(TEXT_JAVASCRIPT)) {
-                                return TEXT_JAVASCRIPT;
+                            } else if (type.test(JsonProcessing.APPLICATION_JAVASCRIPT)) {
+                                return JsonProcessing.APPLICATION_JAVASCRIPT;
+                            } else if (type.test(JsonProcessing.TEXT_JAVASCRIPT)) {
+                                return JsonProcessing.TEXT_JAVASCRIPT;
                             } else if (type.hasSuffix("json")) {
                                 return new MediaType(type.getType(), type.getSubtype());
                             } else {
@@ -231,8 +222,8 @@ public final class JsonSupport implements Service, Handler {
      *
      * @param charset a charset to use or {@code null} for default charset
      * @return the byte array content reader that transforms a publisher of byte buffers to a completion stage that
-     *         might end exceptionally with a {@link IllegalArgumentException} in case of I/O error or
-     *         a {@link javax.json.JsonException}
+     * might end exceptionally with a {@link IllegalArgumentException} in case of I/O error or
+     * a {@link javax.json.JsonException}
      */
     public Reader<JsonStructure> reader(Charset charset) {
         return processingSupport.reader(charset);
@@ -245,8 +236,8 @@ public final class JsonSupport implements Service, Handler {
      * It is intended for derivation of others, more specific readers.
      *
      * @return the byte array content reader that transforms a publisher of byte buffers to a completion stage that
-     *         might end exceptionally with a {@link IllegalArgumentException} in case of I/O error or
-     *         a {@link javax.json.JsonException}
+     * might end exceptionally with a {@link IllegalArgumentException} in case of I/O error or
+     * a {@link javax.json.JsonException}
      */
     public Reader<JsonStructure> reader() {
         return processingSupport.reader();
@@ -298,6 +289,5 @@ public final class JsonSupport implements Service, Handler {
             return new JsonSupport(config);
         }
     }
-
 
 }
