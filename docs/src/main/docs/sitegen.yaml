@@ -23,6 +23,7 @@ engine:
       plantumlconfig: "_plantuml-config.txt"
       javadoc-base-url: "./apidocs/index.html"
       helidon-version: "${project.version}"
+      guides-dir: "${project.basedir}/../examples/guides"
 assets:
   - target: "/"
     includes:
@@ -100,6 +101,14 @@ backend:
               items:
                 -  includes:
                      - "microprofile/*.adoc"
+            - title: "Guides"
+              pathprefix: "/guides"
+              glyph:
+                type: "icon"
+                value: "explore"
+              items:
+                - includes:
+                    - "guides/*.adoc"
             - title: "Javadocs"
               glyph:
                 type: "icon"
@@ -111,4 +120,4 @@ backend:
               glyph:
                 type: "icon"
                 value: "fa-slack"
-              href: "https://proddev-paas-fmw.slack.com/messages/C9Y1RM1FG"
+              href: "https://join.slack.com/t/helidon/shared_invite/enQtNDM1NjU3MjkyNDg2LTFkZTM4NmI3OWUyNjUxYWQ5Njc0NGNiMzY3MTZiZmMwNzAxYmI4YzUzOWNkNzNlZTEwNDRkZGU4YzMzZjhkNTE"

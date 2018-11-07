@@ -19,8 +19,6 @@ package io.helidon.security.providers;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import io.helidon.security.providers.EvictableCache;
-
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -95,5 +93,20 @@ class EvictableCacheTest {
         assertThat(cache.get("three"), is(EMPTY));
 
         cache.close();
+    }
+
+    @Test
+    void testNoCache() {
+        EvictableCache<String, String> cache = EvictableCache.noCache();
+
+        assertThat(cache.computeValue("one", () -> Optional.of("1")), is(Optional.of("1")));
+        assertThat(cache.computeValue("two", () -> Optional.of("2")), is(Optional.of("2")));
+        assertThat(cache.computeValue("three", () -> Optional.of("3")), is(Optional.of("3")));
+
+        assertThat(cache.get("one"), is(EMPTY));
+        assertThat(cache.get("two"), is(EMPTY));
+        assertThat(cache.get("three"), is(EMPTY));
+
+        assertThat(cache.computeValue("one", () -> Optional.of("2")), is(Optional.of("2")));
     }
 }

@@ -76,7 +76,7 @@ class OptionalSecurityTest {
                 .addAuthenticationProvider(OptionalSecurityTest::authenticate)
                 .build();
 
-        featureConfig = new FeatureConfig(false, CollectionsHelper.listOf(), false);
+        featureConfig = new FeatureConfig();
 
         serverConfig = ResourceConfig.forApplication(getApplication());
 
@@ -94,7 +94,7 @@ class OptionalSecurityTest {
                 .build();
 
         clientBuilder = mock(SecurityClientBuilder.class);
-        when(clientBuilder.get()).thenReturn(atr);
+        when(clientBuilder.buildAndGet()).thenReturn(atr);
     }
 
     @Test

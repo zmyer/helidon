@@ -5,6 +5,7 @@
 .exe
 .gif
 .gitignore
+.github/
 .ico
 .jar
 .jks
@@ -22,6 +23,7 @@
 jaxb.index
 /MANIFEST.MF
 /README
+/CONTRIBUTING.md
 /NOTICE.txt
 /LICENSE.txt
 /copyright.txt
@@ -39,3 +41,4 @@ empty_file
 copyright-exclude.txt
 src/test/resources/sample.txt
 src/main/resources/WEB/node
+webserver/examples/streaming/src/main/resources/large-file.bin

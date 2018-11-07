@@ -22,13 +22,13 @@ import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -58,6 +58,7 @@ import io.helidon.security.jwt.JwtException;
 import io.helidon.security.jwt.JwtUtil;
 import io.helidon.security.jwt.SignedJwt;
 import io.helidon.security.jwt.jwk.JwkKeys;
+import io.helidon.security.oidc.common.OidcConfig;
 import io.helidon.security.providers.TokenCredential;
 import io.helidon.security.spi.AuthenticationProvider;
 import io.helidon.security.spi.OutboundSecurityProvider;
@@ -83,7 +84,6 @@ public final class OidcProvider extends SynchronousProvider implements Authentic
     private final OidcConfig oidcConfig;
     private final TokenHandler paramHeaderHandler;
     private final BiConsumer<SignedJwt, Errors.Collector> jwtValidator;
-    private final List<SubjectEnhancer> enhancers = new LinkedList<>();
 
     private OidcProvider(OidcConfig oidcConfig) {
         this.oidcConfig = oidcConfig;
@@ -138,10 +138,6 @@ public final class OidcProvider extends SynchronousProvider implements Authentic
                                             .readEntity(String.class));
                 }
             };
-        }
-
-        if (oidcConfig.idcsRoles()) {
-            this.enhancers.add(new IdcsRoles(oidcConfig));
         }
     }
 
@@ -198,7 +194,7 @@ public final class OidcProvider extends SynchronousProvider implements Authentic
         if (token.isPresent()) {
             return validateToken(providerRequest, token.get());
         } else {
-            return missingToken(providerRequest);
+            return errorResponse(providerRequest, Http.Status.UNAUTHORIZED_401, null, "Missing token");
         }
     }
 
@@ -238,41 +234,67 @@ public final class OidcProvider extends SynchronousProvider implements Authentic
         return result;
     }
 
-    private AuthenticationResponse missingToken(ProviderRequest providerRequest) {
-        Set<String> expectedScopes = expectedScopes(providerRequest);
+    private AuthenticationResponse errorResponse(ProviderRequest providerRequest,
+                                                 Http.Status status,
+                                                 String code,
+                                                 String description) {
+        if (oidcConfig.shouldRedirect()) {
+            Set<String> expectedScopes = expectedScopes(providerRequest);
 
-        StringBuilder scopes = new StringBuilder(oidcConfig.baseScopes());
+            StringBuilder scopes = new StringBuilder(oidcConfig.baseScopes());
 
-        expectedScopes
-                .forEach(scope -> scopes.append(' ').append(oidcConfig.scopeAudience()).append(scope));
+            expectedScopes
+                    .forEach(scope -> scopes.append(' ').append(oidcConfig.scopeAudience()).append(scope));
 
-        String scopeString;
-        try {
-            scopeString = URLEncoder.encode(scopes.toString(), "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            // UTF-8 should be supported. If not, just use openid to be able to connect
-            scopeString = oidcConfig.baseScopes();
+            String scopeString;
+            try {
+                scopeString = URLEncoder.encode(scopes.toString(), "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                // UTF-8 should be supported. If not, just use openid to be able to connect
+                scopeString = oidcConfig.baseScopes();
+            }
+
+            String authorizationEndpoint = oidcConfig.authorizationEndpointUri();
+
+            String nonce = UUID.randomUUID().toString();
+            StringBuilder queryString = new StringBuilder("?");
+            queryString.append("client_id=").append(oidcConfig.clientId()).append("&");
+            queryString.append("response_type=code&");
+            queryString.append("redirect_uri=").append(oidcConfig.redirectUriWithHost()).append("&");
+            queryString.append("scope=").append(scopeString).append("&");
+            queryString.append("nonce=").append(nonce).append("&");
+            queryString.append("state=").append(origUri(providerRequest));
+
+            // must redirect
+            return AuthenticationResponse
+                    .builder()
+                    .status(SecurityResponse.SecurityStatus.FAILURE_FINISH)
+                    .statusCode(Http.Status.TEMPORARY_REDIRECT_307.code())
+                    .description("Missing token, redirecting to identity server")
+                    .responseHeader("Location", authorizationEndpoint + queryString)
+                    .build();
+        } else {
+
+            if (null == code) {
+                return AuthenticationResponse.builder()
+                        .status(SecurityResponse.SecurityStatus.FAILURE)
+                        .statusCode(Http.Status.UNAUTHORIZED_401.code())
+                        .responseHeader(Http.Header.WWW_AUTHENTICATE, "Bearer realm=\"" + oidcConfig.realm() + "\"")
+                        .description(description)
+                        .build();
+            } else {
+                return AuthenticationResponse.builder()
+                        .status(SecurityResponse.SecurityStatus.FAILURE)
+                        .statusCode(status.code())
+                        .responseHeader(Http.Header.WWW_AUTHENTICATE, errorHeader(code, description))
+                        .description(description)
+                        .build();
+            }
         }
+    }
 
-        String authorizationEndpoint = oidcConfig.authorizationEndpointUri();
-
-        String nonce = UUID.randomUUID().toString();
-        StringBuilder queryString = new StringBuilder("?");
-        queryString.append("client_id=").append(oidcConfig.clientId()).append("&");
-        queryString.append("response_type=code&");
-        queryString.append("redirect_uri=").append(oidcConfig.redirectUriWithHost()).append("&");
-        queryString.append("scope=").append(scopeString).append("&");
-        queryString.append("nonce=").append(nonce).append("&");
-        queryString.append("state=").append(origUri(providerRequest));
-
-        // must redirect
-        return AuthenticationResponse
-                .builder()
-                .status(SecurityResponse.SecurityStatus.FAILURE_FINISH)
-                .statusCode(Http.Status.TEMPORARY_REDIRECT_307.code())
-                .description("Missing token, redirecting to identity server")
-                .responseHeader("Location", authorizationEndpoint + queryString)
-                .build();
+    private String errorHeader(String code, String description) {
+        return "Bearer realm=\"" + oidcConfig.realm() + "\", error=\"" + code + "\", error_description=\"" + description + "\"";
     }
 
     private String origUri(ProviderRequest providerRequest) {
@@ -315,15 +337,21 @@ public final class OidcProvider extends SynchronousProvider implements Authentic
 
             for (String expectedScope : expectedScopes) {
                 if (!scopes.contains(expectedScope)) {
-                    return missingToken(providerRequest);
+                    return errorResponse(providerRequest,
+                                         Http.Status.FORBIDDEN_403,
+                                         "insufficient_scope",
+                                         "Scope " + expectedScope + " missing");
                 }
             }
 
             return AuthenticationResponse.success(subject);
         } else {
-            errors.log(LOGGER);
-            validationErrors.log(LOGGER);
-            return missingToken(providerRequest);
+            if (LOGGER.isLoggable(Level.FINEST)) {
+                // only log errors when details requested
+                errors.log(LOGGER);
+                validationErrors.log(LOGGER);
+            }
+            return errorResponse(providerRequest, Http.Status.UNAUTHORIZED_401, "invalid_token", "Token not valid");
         }
     }
 
@@ -348,8 +376,6 @@ public final class OidcProvider extends SynchronousProvider implements Authentic
                                                                                                  .name(scope)
                                                                                                  .type("scope")
                                                                                                  .build())));
-
-        enhancers.forEach(enhancer -> enhancer.enhance(jwt, subjectBuilder));
 
         return subjectBuilder.build();
 

@@ -24,7 +24,7 @@
     <parent>
         <groupId>io.helidon.security.examples</groupId>
         <artifactId>helidon-security-examples-project</artifactId>
-        <version>0.10.0-SNAPSHOT</version>
+        <version>0.10.6-SNAPSHOT</version>
     </parent>
     <artifactId>helidon-security-examples-oidc</artifactId>
     <name>Helidon Security Examples IDCS Login</name>
@@ -56,6 +56,11 @@
         <dependency>
             <groupId>io.helidon.security</groupId>
             <artifactId>helidon-security-provider-oidc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.security</groupId>
+            <artifactId>helidon-security-provider-idcs-mapper</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

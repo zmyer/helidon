@@ -41,6 +41,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import io.helidon.common.CollectionsHelper;
+import io.helidon.common.configurable.ThreadPoolSupplier;
 import io.helidon.config.Config;
 import io.helidon.security.internal.SecurityAuditEvent;
 import io.helidon.security.spi.AuditProvider;
@@ -50,6 +51,7 @@ import io.helidon.security.spi.OutboundSecurityProvider;
 import io.helidon.security.spi.ProviderSelectionPolicy;
 import io.helidon.security.spi.SecurityProvider;
 import io.helidon.security.spi.SecurityProviderService;
+import io.helidon.security.spi.SubjectMappingProvider;
 
 import io.opentracing.Tracer;
 
@@ -74,22 +76,31 @@ public final class Security {
      */
     public static final String HEADER_ORIG_URI = "X_ORIG_URI_HEADER";
 
-    private static final Set<String> RESERVED_PROVIDER_KEYS = CollectionsHelper.setOf("name",
-                                                                                      "class",
-                                                                                      "is-authentication-provider",
-                                                                                      "is-authorization-provider",
-                                                                                      "is-client-security-provider",
-                                                                                      "is-audit-provider");
+    private static final Set<String> RESERVED_PROVIDER_KEYS = CollectionsHelper.setOf(
+            "name",
+            "class",
+            "is-authentication-provider",
+            "is-authorization-provider",
+            "is-client-security-provider",
+            "is-audit-provider");
+
+    private static final Set<String> CONFIG_INTERNAL_PREFIXES = CollectionsHelper.setOf(
+            "provider-policy",
+            "providers",
+            "environment"
+    );
 
     private static final Logger LOGGER = Logger.getLogger(Security.class.getName());
 
     private final Collection<Class<? extends Annotation>> annotations = new LinkedList<>();
     private final List<Consumer<AuditProvider.TracedAuditEvent>> auditors = new LinkedList<>();
+    private final Optional<SubjectMappingProvider> subjectMappingProvider;
     private final String instanceUuid;
     private final ProviderSelectionPolicy providerSelectionPolicy;
     private final Tracer securityTracer;
     private final SecurityTime serverTime;
     private final Supplier<ExecutorService> executorService;
+    private final Config securityConfig;
 
     @SuppressWarnings("unchecked")
     private Security(Builder builder) {
@@ -98,6 +109,8 @@ public final class Security {
         this.executorService = builder.executorService;
         this.annotations.addAll(SecurityUtil.getAnnotations(builder.allProviders));
         this.securityTracer = SecurityUtil.getTracer(builder.tracingEnabled, builder.tracer);
+        this.subjectMappingProvider = Optional.ofNullable(builder.subjectMappingProvider);
+        this.securityConfig = builder.config;
 
         //providers
         List<NamedProvider<AuthorizationProvider>> atzProviders = new LinkedList<>();
@@ -293,6 +306,34 @@ public final class Security {
         return annotations;
     }
 
+    /**
+     * The configuration of security.
+     * <p>
+     * This method will NOT return security internal configuration:
+     * <ul>
+     * <li>provider-policy</li>
+     * <li>providers</li>
+     * <li>environment</li>
+     * </ul>
+     *
+     * @param child the name of the child node to retrieve from config
+     * @return a child node of security configuration
+     * @throws IllegalArgumentException in case you request child in one of the forbidden trees
+     */
+    public Config getConfig(String child) {
+        String test = child.trim();
+        if (test.isEmpty()) {
+            throw new IllegalArgumentException("Root of security configuration is not available");
+        }
+        for (String prefix : CONFIG_INTERNAL_PREFIXES) {
+            if (child.equals(prefix) || child.startsWith(prefix + ".")) {
+                throw new IllegalArgumentException("Security configuration for " + prefix + " is not available");
+            }
+        }
+
+        return securityConfig.get(child);
+    }
+
     Optional<? extends AuthenticationProvider> resolveAtnProvider(String providerName) {
         return resolveProvider(AuthenticationProvider.class, providerName);
     }
@@ -336,6 +377,10 @@ public final class Security {
         return SecurityEnvironment.builder(serverTime);
     }
 
+    public Optional<SubjectMappingProvider> getSubjectMapper() {
+        return subjectMappingProvider;
+    }
+
     /**
      * Builder pattern class for helping create {@link Security} in a convenient way.
      */
@@ -348,13 +393,14 @@ public final class Security {
 
         private NamedProvider<AuthenticationProvider> authnProvider;
         private NamedProvider<AuthorizationProvider> authzProvider;
+        private SubjectMappingProvider subjectMappingProvider;
         private Config config = Config.empty();
         private Function<ProviderSelectionPolicy.Providers, ProviderSelectionPolicy> providerSelectionPolicy =
                 FirstProviderSelectionPolicy::new;
         private Tracer tracer;
         private boolean tracingEnabled = true;
         private SecurityTime serverTime = SecurityTime.builder().build();
-        private Supplier<ExecutorService> executorService = ThreadPoolSupplier.builder().build();
+        private Supplier<ExecutorService> executorService = ThreadPoolSupplier.create();
 
         private Builder() {
         }
@@ -469,6 +515,9 @@ public final class Security {
             }
             if (provider instanceof AuditProvider) {
                 addAuditProvider((AuditProvider) provider);
+            }
+            if (provider instanceof SubjectMappingProvider) {
+                subjectMappingProvider((SubjectMappingProvider) provider);
             }
 
             return this;
@@ -710,6 +759,19 @@ public final class Security {
         }
 
         /**
+         * Configure a subject mapping provider that would be used once authentication is processed.
+         * Allows you to add {@link Grant Grants} to {@link Subject} or modify it in other ways.
+         *
+         * @param provider provider to use for subject mapping
+         * @return updated builder instance
+         */
+        public Builder subjectMappingProvider(SubjectMappingProvider provider) {
+            this.subjectMappingProvider = provider;
+            this.allProviders.put(provider, true);
+            return this;
+        }
+
+        /**
          * Add an audit provider to this security runtime.
          * All configured audit providers are used.
          *
@@ -768,8 +830,9 @@ public final class Security {
          * @return updated builder instance
          */
         Builder fromConfig(Config config) {
+            this.config = config.get("security");
             config.get("security.environment.server-time").asOptional(SecurityTime.class).ifPresent(this::serverTime);
-            executorSupplier(ThreadPoolSupplier.from(config));
+            executorSupplier(ThreadPoolSupplier.create(config.get("security.environment.executor-service")));
 
             Map<String, SecurityProviderService> configKeyToService = new HashMap<>();
             Map<String, SecurityProviderService> classNameToService = new HashMap<>();
@@ -813,6 +876,7 @@ public final class Security {
                 boolean isAuthz = pConf.get("is-authorization-provider").asBoolean(true);
                 boolean isClientSec = pConf.get("is-client-security-provider").asBoolean(true);
                 boolean isAudit = pConf.get("is-audit-provider").asBoolean(true);
+                boolean isSubjectMapper = pConf.get("is-subject-mapper").asBoolean(true);
 
                 SecurityProvider provider;
                 if (null == providerService) {
@@ -832,6 +896,9 @@ public final class Security {
                 }
                 if (isAudit && (provider instanceof AuditProvider)) {
                     addAuditProvider((AuditProvider) provider);
+                }
+                if (isSubjectMapper && (provider instanceof SubjectMappingProvider)) {
+                    subjectMappingProvider((SubjectMappingProvider) provider);
                 }
             });
 
