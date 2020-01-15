@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@ import java.nio.file.attribute.FileAttribute;
 import java.util.Objects;
 
 import io.helidon.config.Config;
-import io.helidon.config.ConfigException;
-import io.helidon.config.ConfigMappingException;
-import io.helidon.config.MissingValueException;
 import io.helidon.config.spi.AbstractParsableConfigSource;
 import io.helidon.config.spi.ConfigParser;
 import io.helidon.config.spi.ConfigSource;
 import io.helidon.config.spi.PollingStrategy;
+
+import org.eclipse.jgit.transport.CredentialsProvider;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 /**
  * Git ConfigSource builder.
@@ -57,69 +57,48 @@ import io.helidon.config.spi.PollingStrategy;
  * If the directory nor the uri is not set, an exception is thrown.
  * <p>
  * If Git ConfigSource is {@code mandatory} and a {@code uri} is not responsive or {@code key} does not exist
- * then {@link ConfigSource#load} throws {@link ConfigException}.
+ * then {@link ConfigSource#load} throws {@link io.helidon.config.ConfigException}.
  * <p>
  * One of {@code media-type} and {@code parser} properties must be set to be clear how to parse the content. If both of them
  * are set, then {@code parser} has precedence.
  */
 public final class GitConfigSourceBuilder
-        extends AbstractParsableConfigSource.Builder<GitConfigSourceBuilder, GitConfigSourceBuilder.GitEndpoint> {
+        extends
+        AbstractParsableConfigSource.Builder<GitConfigSourceBuilder, GitConfigSourceBuilder.GitEndpoint, GitConfigSource> {
 
     private static final String PATH_KEY = "path";
     private static final String URI_KEY = "uri";
     private static final String BRANCH_KEY = "branch";
     private static final String DIRECTORY_KEY = "directory";
-    private final String path;
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
+    private String path;
     private URI uri;
     private String branch = "master";
     private Path directory;
+    private CredentialsProvider credentialsProvider;
 
-    private GitConfigSourceBuilder(String path) {
+    GitConfigSourceBuilder() {
         super(GitEndpoint.class);
 
-        Objects.requireNonNull(path, "path cannot be null");
+        this.credentialsProvider = CredentialsProvider.getDefault();
+    }
 
+    /**
+     * Configure path to use.
+     *
+     * @param path path to the configuration file
+     * @return updated builder instance
+     */
+    public GitConfigSourceBuilder path(String path) {
         this.path = path;
-    }
-
-    /**
-     * Creates a builder with mandatory path to the configuration source.
-     *
-     * @param path a path to the configuration file
-     * @return a new builder
-     * @see #from(Config)
-     */
-    public static GitConfigSourceBuilder from(String path) {
-        return new GitConfigSourceBuilder(path);
-    }
-
-    /**
-     * Initializes config source instance from meta configuration properties,
-     * see {@link io.helidon.config.ConfigSources#load(Config)}.
-     * <p>
-     * Mandatory {@code properties}, see {@link #from(String)}:
-     * <ul>
-     * <li>{@code path} - type {@code String}</li>
-     * </ul>
-     * Optional {@code properties}: see {@link #init(Config)}.
-     *
-     * @param metaConfig meta-configuration used to initialize returned config source builder instance from.
-     * @return new instance of config source builder described by {@code metaConfig}
-     * @throws MissingValueException  in case the configuration tree does not contain all expected sub-nodes
-     *                                required by the mapper implementation to provide instance of Java type.
-     * @throws ConfigMappingException in case the mapper fails to map the (existing) configuration tree represented by the
-     *                                supplied configuration node to an instance of a given Java type.
-     * @see #from(String)
-     * @see #init(Config)
-     */
-    public static GitConfigSourceBuilder from(Config metaConfig) throws ConfigMappingException, MissingValueException {
-        return GitConfigSourceBuilder.from(metaConfig.get(PATH_KEY).asString())
-                .init(metaConfig);
+        return this;
     }
 
     /**
      * {@inheritDoc}
      * <ul>
+     * <li>{@code path} - type {@code String}, see {@link #path(String)}</li>
      * <li>{@code uri} - type {@code URI}, see {@link #uri(URI)}</li>
      * <li>{@code branch} - type {@code String}, see {@link #branch(String)}</li>
      * <li>{@code directory} - type {@code Path}, see {@link #directory(Path)}</li>
@@ -129,23 +108,30 @@ public final class GitConfigSourceBuilder
      * @return modified builder instance
      */
     @Override
-    protected GitConfigSourceBuilder init(Config metaConfig) {
+    public GitConfigSourceBuilder config(Config metaConfig) {
+        metaConfig.get(PATH_KEY).asString().ifPresent(this::path);
         //uri
-        metaConfig.get(URI_KEY).asOptional(URI.class)
+        metaConfig.get(URI_KEY).as(URI.class)
                 .ifPresent(this::uri);
         //branch
-        metaConfig.get(BRANCH_KEY).asOptionalString()
+        metaConfig.get(BRANCH_KEY).asString()
                 .ifPresent(this::branch);
         //directory
-        metaConfig.get(DIRECTORY_KEY).asOptional(Path.class)
+        metaConfig.get(DIRECTORY_KEY).as(Path.class)
                 .ifPresent(this::directory);
 
-        return super.init(metaConfig);
+        metaConfig.get(USERNAME).as(String.class)
+                .ifPresent(user -> {
+                    String password = metaConfig.get(PASSWORD).as(String.class).orElse(null);
+                    this.credentialsProvider = new UsernamePasswordCredentialsProvider(user, password);
+                });
+
+        return super.config(metaConfig);
     }
 
     @Override
-    protected GitEndpoint getTarget() {
-        return new GitEndpoint(uri, branch, directory, path);
+    protected GitEndpoint target() {
+        return new GitEndpoint(uri, branch, directory, path, credentialsProvider);
     }
 
     /**
@@ -181,13 +167,41 @@ public final class GitConfigSourceBuilder
         return this;
     }
 
-    PollingStrategy getPollingStrategyInternal() { //just for testing purposes
-        return super.getPollingStrategy();
+    /**
+     * Sets user and password to the repository.
+     *
+     * @param user user to the repository
+     * @param password password to the repository
+     * @return this builder
+     */
+    public GitConfigSourceBuilder credentials(String user, String password) {
+        Objects.requireNonNull(user);
+        this.credentialsProvider = new UsernamePasswordCredentialsProvider(user, password);
+        return this;
+    }
+
+    /**
+     * Sets new {@link CredentialsProvider} which should be used by application.
+     *
+     * @param credentialsProvider credentials provider
+     * @return this builder
+     */
+    public GitConfigSourceBuilder credentialsProvider(CredentialsProvider credentialsProvider) {
+        this.credentialsProvider = credentialsProvider;
+        return this;
+    }
+
+    PollingStrategy pollingStrategyInternal() { //just for testing purposes
+        return super.pollingStrategy();
     }
 
     @Override
-    public ConfigSource build() {
-        return new GitConfigSource(this, getTarget());
+    public GitConfigSource build() {
+        if (null == path) {
+            throw new IllegalArgumentException("git path must be defined");
+        }
+
+        return new GitConfigSource(this, target());
     }
 
     /**
@@ -201,20 +215,26 @@ public final class GitConfigSourceBuilder
         private final String branch;
         private final Path directory;
         private final String path;
+        private final CredentialsProvider credentialsProvider;
 
         /**
          * Creates a descriptor.
-         *
          * @param uri       a remote git repository uri
          * @param branch    a git branch
          * @param directory a local git directory
          * @param path      a relative path to the configuration file
+         * @param credentialsProvider a credentials provider
          */
-        public GitEndpoint(URI uri, String branch, Path directory, String path) {
+        public GitEndpoint(URI uri,
+                           String branch,
+                           Path directory,
+                           String path,
+                           CredentialsProvider credentialsProvider) {
             this.uri = uri;
             this.branch = branch;
             this.path = path;
             this.directory = directory;
+            this.credentialsProvider = credentialsProvider;
         }
 
         /**
@@ -222,7 +242,7 @@ public final class GitConfigSourceBuilder
          *
          * @return a remote git repository uri
          */
-        public URI getUri() {
+        public URI uri() {
             return uri;
         }
 
@@ -231,7 +251,7 @@ public final class GitConfigSourceBuilder
          *
          * @return a git branch
          */
-        public String getBranch() {
+        public String branch() {
             return branch;
         }
 
@@ -240,7 +260,7 @@ public final class GitConfigSourceBuilder
          *
          * @return a local git directory
          */
-        public Path getDirectory() {
+        public Path directory() {
             return directory;
         }
 
@@ -249,8 +269,17 @@ public final class GitConfigSourceBuilder
          *
          * @return a relative path to the configuration file
          */
-        public String getPath() {
+        public String path() {
             return path;
+        }
+
+        /**
+         * Returns an instance of {@link CredentialsProvider}.
+         *
+         * @return credentials provider instance
+         */
+        public CredentialsProvider credentialsProvider() {
+            return credentialsProvider;
         }
     }
 }

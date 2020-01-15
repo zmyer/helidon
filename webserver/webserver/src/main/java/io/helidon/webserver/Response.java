@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,32 +26,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import io.helidon.common.OptionalHelper;
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.http.Http;
 import io.helidon.common.http.MediaType;
-import io.helidon.common.reactive.Flow;
-import io.helidon.common.reactive.ReactiveStreamsAdapter;
-import io.helidon.webserver.spi.BareResponse;
+import io.helidon.common.reactive.Single;
+import io.helidon.media.common.ContentWriters;
+import io.helidon.tracing.config.SpanTracingConfig;
+import io.helidon.tracing.config.TracingConfigUtil;
 
 import io.opentracing.Span;
 import io.opentracing.SpanContext;
 import io.opentracing.Tracer;
-import io.opentracing.util.GlobalTracer;
-import reactor.core.publisher.Mono;
 
 /**
  * The basic implementation of {@link ServerResponse}.
  */
 abstract class Response implements ServerResponse {
+    private static final String TRACING_CONTENT_WRITE = "content-write";
 
     private final WebServer webServer;
     private final BareResponse bareResponse;
@@ -61,7 +59,7 @@ abstract class Response implements ServerResponse {
 
     // Content related
     private final SendLockSupport sendLockSupport;
-    private final ArrayList<Writer> writers;
+    private final ArrayList<Writer<?>> writers;
     private final ArrayList<Function<Flow.Publisher<DataChunk>, Flow.Publisher<DataChunk>>> filters;
 
     /**
@@ -76,7 +74,7 @@ abstract class Response implements ServerResponse {
         this.headers = new HashResponseHeaders(bareResponse);
         this.completionStage = bareResponse.whenCompleted().thenApply(a -> this);
         this.sendLockSupport = new SendLockSupport();
-        this.writers = new ArrayList<>(defaultWriters());
+        this.writers = new ArrayList<>();
         this.filters = new ArrayList<>();
     }
 
@@ -95,62 +93,14 @@ abstract class Response implements ServerResponse {
         this.filters = response.filters;
     }
 
-    private Collection<Writer> defaultWriters() {
-        // Byte array
-        Writer<byte[]> byteArrayWriter = new Writer<>(byte[].class, null, ContentWriters.byteArrayWriter(true));
-        // Char sequence
-        Writer<CharSequence> charSequenceWriter = new Writer<>(CharSequence.class, null, s -> {
-            MediaType mediaType = headers.contentType().orElse(MediaType.TEXT_PLAIN);
-            String charset = mediaType.getCharset().orElse(StandardCharsets.UTF_8.name());
-            headers.contentType(mediaType.withCharset(charset));
-            return ContentWriters.charSequenceWriter(Charset.forName(charset)).apply(s);
-        });
-        // Channel
-        Writer<ReadableByteChannel> byteChannelWriter
-                = new Writer<>(ReadableByteChannel.class, null, ContentWriters.byteChannelWriter());
-        // Path
-        Writer<Path> pathWriter = new Writer<>(Path.class, null,
-               path -> {
-                   // Set response length - if possible
-                   try {
-                       // Is it existing and readable file
-                       if (!Files.exists(path)) {
-                           throw new IllegalArgumentException("File path argument doesn't exist!");
-                       }
-                       if (!Files.isRegularFile(path)) {
-                           throw new IllegalArgumentException("File path argument isn't a file!");
-                       }
-                       if (!Files.isReadable(path)) {
-                           throw new IllegalArgumentException("File path argument isn't readable!");
-                       }
-                       // Try to write length
-                       try {
-                           headers.contentLength(Files.size(path));
-                       } catch (Exception e) {
-                           // Cannot get length or write length, not a big deal
-                       }
-                       // And write
-                       FileChannel fc = FileChannel.open(path, StandardOpenOption.READ);
-                       return ContentWriters.byteChannelWriter().apply(fc);
-                   } catch (IOException e) {
-                       throw new IllegalArgumentException("Cannot read a file!", e);
-                   }
-               });
-        // File
-        Writer<File> fileWriter = new Writer<>(File.class,
-                                               null,
-                                               file -> pathWriter.function.apply(file.toPath()));
-        return Arrays.asList(byteArrayWriter, charSequenceWriter, byteChannelWriter, pathWriter, fileWriter);
-    }
-
     /**
      * Returns a span context related to the current request.
      * <p>
      * {@code SpanContext} is a tracing component from <a href="http://opentracing.io">opentracing.io</a> standard.
      *
-     * @return the related span context
+     * @return the related span context or empty if not enabled
      */
-    abstract SpanContext spanContext();
+    abstract Optional<SpanContext> spanContext();
 
     @Override
     public WebServer webServer() {
@@ -176,26 +126,28 @@ abstract class Response implements ServerResponse {
         return headers;
     }
 
-    private Tracer tracer() {
-        Tracer result = null;
-        if (webServer != null) {
-            ServerConfiguration configuration = webServer.configuration();
-            if (configuration != null) {
-                result = configuration.tracer();
-            }
-        }
-        return result == null ? GlobalTracer.get() : result;
-    }
-
     private <T> Span createWriteSpan(T obj) {
-        Tracer.SpanBuilder spanBuilder = tracer().buildSpan("content-write");
-        if (spanContext() != null) {
-            spanBuilder.asChildOf(spanContext());
+        Optional<SpanContext> parentSpan = spanContext();
+        if (!parentSpan.isPresent()) {
+            // we only trace write span if there is a parent (parent is either webserver HTTP Request span, or inherited span
+            // from request
+            return null;
         }
-        if (obj != null) {
-            spanBuilder.withTag("response.type", obj.getClass().getName());
+
+        SpanTracingConfig spanConfig = TracingConfigUtil.spanConfig(NettyWebServer.TRACING_COMPONENT, TRACING_CONTENT_WRITE);
+
+        if (spanConfig.enabled()) {
+            String spanName = spanConfig.newName().orElse(TRACING_CONTENT_WRITE);
+            Tracer.SpanBuilder spanBuilder = WebTracingConfig.tracer(webServer()).buildSpan(spanName)
+                .asChildOf(parentSpan.get());
+
+            if (obj != null) {
+                spanBuilder.withTag("response.type", obj.getClass().getName());
+            }
+            return spanBuilder.start();
         }
-        return spanBuilder.start();
+
+        return null;
     }
 
     @Override
@@ -214,7 +166,9 @@ abstract class Response implements ServerResponse {
             }, content == null);
             return whenSent();
         } catch (RuntimeException | Error e) {
-            writeSpan.finish();
+            if (null != writeSpan) {
+                writeSpan.finish();
+            }
             throw e;
         }
     }
@@ -224,8 +178,7 @@ abstract class Response implements ServerResponse {
         Span writeSpan = createWriteSpan(content);
         try {
             Flow.Publisher<DataChunk> publisher = (content == null)
-                    ? ReactiveStreamsAdapter.publisherToFlow(Mono.empty())
-                    : content;
+                    ? Single.empty() : content;
             sendLockSupport.execute(() -> {
                 Flow.Publisher<DataChunk> p = applyFilters(publisher, writeSpan);
                 sendLockSupport.contentSend = true;
@@ -233,7 +186,9 @@ abstract class Response implements ServerResponse {
             }, content == null);
             return whenSent();
         } catch (RuntimeException | Error e) {
-            writeSpan.finish();
+            if (null != writeSpan) {
+                writeSpan.finish();
+            }
             throw e;
         }
     }
@@ -246,23 +201,70 @@ abstract class Response implements ServerResponse {
     @SuppressWarnings("unchecked")
     <T> Flow.Publisher<DataChunk> createPublisherUsingWriter(T content) {
         if (content == null) {
-            return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+            return Single.empty();
         }
 
+        // Try to get a publisher from registered writers
         synchronized (sendLockSupport) {
             for (int i = writers.size() - 1; i >= 0; i--) {
-                Writer<T> writer = writers.get(i);
+                Writer<T> writer = (Writer<T>) writers.get(i);
                 if (writer.accept(content)) {
-                    Flow.Publisher<DataChunk> result = writer.function.apply(content);
-                    if (result == null) {
-                        break;
-                    } else {
-                        return result;
-                    }
+                    return writer.function.apply(content);
                 }
             }
         }
+
+        return createDefaultPublisher(content);
+    }
+
+    private <T> Flow.Publisher<DataChunk> createDefaultPublisher(T content) {
+        final Class<?> type = content.getClass();
+        if (File.class.isAssignableFrom(type)) {
+            return toPublisher(((File) content).toPath());
+        } else if (Path.class.isAssignableFrom(type)) {
+            return toPublisher((Path) content);
+        } else if (ReadableByteChannel.class.isAssignableFrom(type)) {
+            return ContentWriters.byteChannelWriter().apply((ReadableByteChannel) content);
+        } else if (CharSequence.class.isAssignableFrom(type)) {
+            return toPublisher((CharSequence) content);
+        } else if (byte[].class.isAssignableFrom(type)) {
+            return ContentWriters.byteArrayWriter(true).apply((byte[]) content);
+        }
         return null;
+    }
+
+    private Flow.Publisher<DataChunk> toPublisher(CharSequence s) {
+        MediaType mediaType = headers.contentType().orElse(MediaType.TEXT_PLAIN);
+        String charset = mediaType.charset().orElse(StandardCharsets.UTF_8.name());
+        headers.contentType(mediaType.withCharset(charset));
+        return ContentWriters.charSequenceWriter(Charset.forName(charset)).apply(s);
+    }
+
+    private Flow.Publisher<DataChunk> toPublisher(Path path) {
+        // Set response length - if possible
+        try {
+            // Is it existing and readable file
+            if (!Files.exists(path)) {
+                throw new IllegalArgumentException("File path argument doesn't exist!");
+            }
+            if (!Files.isRegularFile(path)) {
+                throw new IllegalArgumentException("File path argument isn't a file!");
+            }
+            if (!Files.isReadable(path)) {
+                throw new IllegalArgumentException("File path argument isn't readable!");
+            }
+            // Try to write length
+            try {
+                headers.contentLength(Files.size(path));
+            } catch (Exception e) {
+                // Cannot get length or write length, not a big deal
+            }
+            // And write
+            FileChannel fc = FileChannel.open(path, StandardOpenOption.READ);
+            return ContentWriters.byteChannelWriter().apply(fc);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Cannot read a file!", e);
+        }
     }
 
     @Override
@@ -339,7 +341,7 @@ abstract class Response implements ServerResponse {
 
             // Test content type compatibility
             return requestedContentType == null
-                    || OptionalHelper.from(headers().contentType())
+                    || headers().contentType()
                                 .or(() -> { // if no contentType is yet registered, try to write requested
                                     try {
                                         headers.contentType(requestedContentType);
@@ -347,7 +349,7 @@ abstract class Response implements ServerResponse {
                                     } catch (Exception e) {
                                         return Optional.empty();
                                     }
-                                }).asOptional()
+                                })
                                 .filter(requestedContentType) // MediaType is a predicate of compatible media type
                                 .isPresent();
         }

@@ -20,26 +20,21 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.faulttolerance.Asynchronous;
-import org.eclipse.microprofile.faulttolerance.Bulkhead;
-import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
-import org.eclipse.microprofile.faulttolerance.Fallback;
-import org.eclipse.microprofile.faulttolerance.Retry;
-import org.eclipse.microprofile.faulttolerance.Timeout;
+import static io.helidon.microprofile.faulttolerance.FaultToleranceParameter.getParameter;
 
 /**
  * Class MethodAntn.
  */
-public class MethodAntn {
+public abstract class MethodAntn {
     private static final Logger LOGGER = Logger.getLogger(MethodAntn.class.getName());
 
     private final Method method;
+
+    private final Class<?> beanClass;
 
     enum MatchingType {
         METHOD, CLASS
@@ -74,38 +69,65 @@ public class MethodAntn {
     /**
      * Constructor.
      *
+     * @param beanClass Bean class.
      * @param method The method.
      */
-    public MethodAntn(Method method) {
+    public MethodAntn(Class<?> beanClass, Method method) {
+        this.beanClass = beanClass;
         this.method = method;
-        validate();
     }
 
-    public Method getMethod() {
+    Method method() {
         return method;
+    }
+
+    Class<?> beanClass() {
+        return beanClass;
+    }
+
+    /**
+     * Look up an annotation on the method.
+     *
+     * @param annotClass Annotation class.
+     * @param <A> Annotation class type param.
+     * @return A lookup result.
+     */
+    public final <A extends Annotation> LookupResult<A> lookupAnnotation(Class<A> annotClass) {
+        return lookupAnnotation(beanClass, method, annotClass);
     }
 
     /**
      * Returns underlying annotation and info as to how it was found.
      *
-     * @param clazz Annotation class.
+     * @param beanClass The bean class.
+     * @param method The method.
+     * @param annotClass The annotation class.
      * @param <A> Annotation type.
      * @return The lookup result or {@code null}.
      */
-    public final <A extends Annotation> LookupResult<A> lookupAnnotation(Class<A> clazz) {
-        A annotation = getMethod().getAnnotation(clazz);
+    static <A extends Annotation> LookupResult<A> lookupAnnotation(Class<?> beanClass, Method method,
+                                                                   Class<A> annotClass) {
+        A annotation = method.getAnnotation(annotClass);
         if (annotation != null) {
             if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("Found annotation '" + clazz.getName()
-                            + "' method '" + getMethod().getName() + "'");
+                LOGGER.fine("Found annotation '" + annotClass.getName()
+                        + "' method '" + method.getName() + "'");
             }
             return new LookupResult<>(MatchingType.METHOD, annotation);
         }
-        annotation = getMethod().getDeclaringClass().getAnnotation(clazz);
+        annotation = beanClass.getAnnotation(annotClass);
         if (annotation != null) {
             if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("Found annotation '" + clazz.getName()
-                            + "' class '" + getMethod().getDeclaringClass().getName() + "'");
+                LOGGER.fine("Found annotation '" + annotClass.getName()
+                        + "' class '" + method.getDeclaringClass().getName() + "'");
+            }
+            return new LookupResult<>(MatchingType.CLASS, annotation);
+        }
+        annotation = method.getDeclaringClass().getAnnotation(annotClass);
+        if (annotation != null) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Found annotation '" + method.getDeclaringClass().getName()
+                        + "' class '" + method.getDeclaringClass().getName() + "'");
             }
             return new LookupResult<>(MatchingType.CLASS, annotation);
         }
@@ -115,19 +137,19 @@ public class MethodAntn {
     /**
      * Finds if an annotation is present on a method or its class.
      *
+     * @param beanClass The bean class.
      * @param method Method to check.
-     * @param clazz Annotation class.
+     * @param annotClass Annotation class.
      * @return Outcome of test.
      */
-    static boolean isAnnotationPresent(Method method, Class<? extends Annotation> clazz) {
-        return new MethodAntn(method).lookupAnnotation(clazz) != null;
+    static boolean isAnnotationPresent(Class<?> beanClass, Method method, Class<? extends Annotation> annotClass) {
+        return lookupAnnotation(beanClass, method, annotClass) != null;
     }
 
     /**
      * Validate the annotation on this method.
      */
-    public void validate() {
-    }
+    public abstract void validate();
 
     /**
      * Get annotation type.
@@ -152,34 +174,22 @@ public class MethodAntn {
         // Annotation type
         final String annotationType = getClass().getInterfaces()[0].getSimpleName();
 
-        // Check if property defined at method level
+        // Check property depending on matching type
         if (type == MatchingType.METHOD) {
-            String methodLevel = String.format("%s/%s/%s/%s",
-                                               method.getDeclaringClass().getName(),
-                                               method.getName(),
-                                               annotationType,
-                                               parameter);
-            value = getProperty(methodLevel);
+            value = getParameter(method.getDeclaringClass().getName(), method.getName(),
+                    annotationType, parameter);
+            if (value != null) {
+                return value;
+            }
+        } else if (type == MatchingType.CLASS) {
+            value = getParameter(method.getDeclaringClass().getName(), annotationType, parameter);
             if (value != null) {
                 return value;
             }
         }
 
-        // Check if property defined a class level
-        String classLevel = String.format("%s/%s/%s",
-                                          method.getDeclaringClass().getName(),
-                                          annotationType,
-                                          parameter);
-        value = getProperty(classLevel);
-        if (value != null) {
-            return value;
-        }
-
-        // Check if propoerty defined at global level
-        String globalLevel = String.format("%s/%s",
-                                           annotationType,
-                                           parameter);
-        value = getProperty(globalLevel);
+        // Check if property defined at global level
+        value = getParameter(annotationType, parameter);
         if (value != null) {
             return value;
         }
@@ -211,50 +221,5 @@ public class MethodAntn {
             }
         }
         return (Class<? extends Throwable>[]) result.toArray(new Class[0]);
-    }
-
-    /**
-     * Returns the value of a property using the MP config API.
-     *
-     * @param name Property name.
-     * @return Property value or {@code null} if it does not exist.
-     */
-    protected String getProperty(String name) {
-        try {
-            String value = ConfigProvider.getConfig().getValue(name, String.class);
-            if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("Found config property '" + name + "' value '" + value + "'");
-            }
-            return value;
-        } catch (NoSuchElementException e) {
-            return null;
-        }
-    }
-
-    /**
-     * Determines if a method or its declaring class has a FT annotation.
-     *
-     * @param method The method to check.
-     * @return Outcome of test.
-     */
-    static boolean isFaultToleranceMethod(Method method) {
-        if (method.isAnnotationPresent(Retry.class)
-            || method.isAnnotationPresent(CircuitBreaker.class)
-            || method.isAnnotationPresent(Bulkhead.class)
-            || method.isAnnotationPresent(Timeout.class)
-            || method.isAnnotationPresent(Asynchronous.class)
-            || method.isAnnotationPresent(Fallback.class)) {
-            return true;
-        }
-        final Class<?> clazz = method.getDeclaringClass();
-        if (clazz.isAnnotationPresent(Retry.class)
-            || clazz.isAnnotationPresent(CircuitBreaker.class)
-            || clazz.isAnnotationPresent(Bulkhead.class)
-            || clazz.isAnnotationPresent(Timeout.class)
-            || clazz.isAnnotationPresent(Asynchronous.class)
-            || clazz.isAnnotationPresent(Fallback.class)) {
-            return true;
-        }
-        return false;
     }
 }

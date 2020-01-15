@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,24 @@
 
 package io.helidon.config.internal;
 
-import io.helidon.common.CollectionsHelper;
+import java.util.List;
+
 import io.helidon.config.ConfigException;
 import io.helidon.config.spi.ConfigNode.ListNode;
 import io.helidon.config.spi.ConfigNode.ObjectNode;
 import io.helidon.config.spi.ConfigNode.ValueNode;
 
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
 import static io.helidon.config.ValueNodeMatcher.valueNode;
 import static org.hamcrest.MatcherAssert.assertThat;
-
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.stringContainsInOrder;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests {@link ListNodeBuilderImpl}.
@@ -95,13 +96,14 @@ public class ListNodeBuilderImplTest {
     @Test
     @Disabled // since list and object nodes can now contain "direct" values, this no longer fails
     public void testMergeListToValue() {
-        ConfigException ex = Assertions.assertThrows(ConfigException.class, () -> {
+        ConfigException ex = assertThrows(ConfigException.class, () -> {
             new ObjectNodeBuilderImpl()
                     .addList("top1.prop1", ListNode.builder().addValue("another value").build())
                     .addValue("top1.prop1.0.sub", "text")
                     .build();
         });
-        Assertions.assertTrue(stringContainsInOrder(CollectionsHelper.listOf("top1", "prop1", "merge", "'0'", "OBJECT", "VALUE")).matches(ex.getMessage()));
+        assertThat(ex.getMessage(),
+                   stringContainsInOrder(List.of("top1", "prop1", "merge", "'0'", "OBJECT", "VALUE")));
     }
 
 }

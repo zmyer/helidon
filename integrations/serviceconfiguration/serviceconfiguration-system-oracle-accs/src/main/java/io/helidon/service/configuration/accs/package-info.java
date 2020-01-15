@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@
  * io.helidon.service.configuration.accs.ACCSSystem} {@link
  * io.helidon.service.configuration.api.System System} implementation.
  *
- * @author <a href="mailto:laird.nelson@oracle.com">Laird Nelson</a>
- *
  * @see io.helidon.service.configuration.accs.ACCSSystem
  *
  * @see io.helidon.service.configuration.api.System
+ *
+ * @deprecated This package is slated for removal.
  */
 package io.helidon.service.configuration.accs;

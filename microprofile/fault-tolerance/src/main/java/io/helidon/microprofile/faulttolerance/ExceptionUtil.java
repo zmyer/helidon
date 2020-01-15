@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,32 @@
 
 package io.helidon.microprofile.faulttolerance;
 
+import com.netflix.hystrix.exception.HystrixRuntimeException;
+
 /**
  * Class ExceptionUtil.
  */
 public class ExceptionUtil {
+
+    /**
+     * Exception used internally to propagate other exceptions.
+     */
+    static class WrappedException extends RuntimeException {
+        WrappedException(Throwable t) {
+            super(t);
+        }
+    }
+
+    /**
+     * Wrap throwable into {@code Exception}.
+     *
+     * @param throwable The throwable.
+     * @return A {@code RuntimeException}.
+     */
+    public static Exception toException(Throwable throwable) {
+        return throwable instanceof Exception ? (Exception) throwable
+                : new RuntimeException(throwable);
+    }
 
     /**
      * Wrap throwable into {@code RuntimeException}.
@@ -27,9 +49,19 @@ public class ExceptionUtil {
      * @param throwable The throwable.
      * @return A {@code RuntimeException}.
      */
-    public static RuntimeException wrapThrowable(Throwable throwable) {
-        return throwable instanceof RuntimeException ? (RuntimeException) throwable
-                                                     : new RuntimeException(throwable);
+    public static WrappedException toWrappedException(Throwable throwable) {
+        return throwable instanceof WrappedException ? (WrappedException) throwable
+                : new WrappedException(throwable);
+    }
+
+    /**
+     * Unwrap an throwable wrapped by {@code HystrixRuntimeException}.
+     *
+     * @param throwable Throwable to unwrap.
+     * @return Unwrapped throwable.
+     */
+    public static Throwable unwrapHystrix(Throwable throwable) {
+        return throwable instanceof HystrixRuntimeException ? throwable.getCause() : throwable;
     }
 
     private ExceptionUtil() {

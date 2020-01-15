@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@ package io.helidon.security;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-import io.helidon.common.CollectionsHelper;
 import io.helidon.security.spi.AuthenticationProvider;
 import io.helidon.security.spi.SubjectMappingProvider;
 
@@ -62,58 +62,58 @@ public class SubjectMappingTest {
 
         SecurityContext context = security.createContext(UUID.randomUUID().toString());
 
-        context.setEnv(SecurityEnvironment.builder()
+        context.env(SecurityEnvironment.builder()
                                .path("jarda")
                                .build());
 
         AuthenticationResponse authenticate = context.authenticate();
 
-        assertThat(authenticate.getUser(), not(Optional.empty()));
+        assertThat(authenticate.user(), not(Optional.empty()));
 
-        Subject subject = authenticate.getUser().get();
-        assertThat(subject.getPrincipal().getName(), is("jarda"));
-        assertThat(Security.getRoles(subject), is(CollectionsHelper.setOf()));
-        assertThat(subject.getGrantsByType(CUSTOM_GRANT_TYPE), is(CollectionsHelper.listOf()));
+        Subject subject = authenticate.user().get();
+        assertThat(subject.principal().getName(), is("jarda"));
+        assertThat(Security.getRoles(subject), is(Set.of()));
+        assertThat(subject.grantsByType(CUSTOM_GRANT_TYPE), is(List.of()));
     }
 
     @Test
     void testUserMapping() {
-        contextWithMapper.setEnv(SecurityEnvironment.builder()
+        contextWithMapper.env(SecurityEnvironment.builder()
                                          .path("jarda")
                                          .build());
 
         AuthenticationResponse authenticate = contextWithMapper.authenticate();
 
-        assertThat(authenticate.getUser(), not(Optional.empty()));
+        assertThat(authenticate.user(), not(Optional.empty()));
 
-        Subject subject = authenticate.getUser().get();
-        assertThat(subject.getPrincipal().getName(), is("jarda"));
+        Subject subject = authenticate.user().get();
+        assertThat(subject.principal().getName(), is("jarda"));
 
-        assertThat(Security.getRoles(subject), is(CollectionsHelper.setOf("jarda_role")));
-        List<Role> roleGrants = subject.getGrants(Role.class);
+        assertThat(Security.getRoles(subject), is(Set.of("jarda_role")));
+        List<Role> roleGrants = subject.grants(Role.class);
         assertThat("There should be exactly one role granted", roleGrants.size(), is(1));
         Role role = roleGrants.get(0);
         assertThat(role.getName(), is("jarda_role"));
-        assertThat(role.getOrigin(), is(MAPPER_ORIGIN));
+        assertThat(role.origin(), is(MAPPER_ORIGIN));
 
-        assertThat(subject.getGrantsByType("custom-grant-type"), not(CollectionsHelper.listOf()));
-        List<Grant> customGrants = subject.getGrantsByType(CUSTOM_GRANT_TYPE);
+        assertThat(subject.grantsByType("custom-grant-type"), not(List.of()));
+        List<Grant> customGrants = subject.grantsByType(CUSTOM_GRANT_TYPE);
         assertThat("There should be exactly one role granted", customGrants.size(), is(1));
         Grant grant = customGrants.get(0);
         assertThat(grant.getName(), is(CUSTOM_GRANT));
-        assertThat(grant.getOrigin(), is(MAPPER_ORIGIN));
+        assertThat(grant.origin(), is(MAPPER_ORIGIN));
     }
 
     @Test
     void testFailure() {
-        contextWithMapper.setEnv(SecurityEnvironment.builder()
+        contextWithMapper.env(SecurityEnvironment.builder()
                                          .path("fail")
                                          .build());
 
         AuthenticationResponse response = contextWithMapper.authenticate();
 
-        assertThat(response.getStatus(), is(SecurityResponse.SecurityStatus.FAILURE));
-        assertThat(response.getDescription(), is(Optional.of(INTENTIONAL_FAILURE)));
+        assertThat(response.status(), is(SecurityResponse.SecurityStatus.FAILURE));
+        assertThat(response.description(), is(Optional.of(INTENTIONAL_FAILURE)));
     }
 
     private static class Mapper implements SubjectMappingProvider {
@@ -126,8 +126,8 @@ public class SubjectMappingTest {
         private AuthenticationResponse buildResponse(ProviderRequest providerRequest,
                                                      AuthenticationResponse previousResponse) {
 
-            Optional<Subject> userSubject = providerRequest.getSubject();
-            Optional<Subject> serviceSubject = providerRequest.getService();
+            Optional<Subject> userSubject = providerRequest.subject();
+            Optional<Subject> serviceSubject = providerRequest.service();
 
             if (userSubject.isPresent()) {
                 return mapSubject(userSubject.get());
@@ -144,7 +144,7 @@ public class SubjectMappingTest {
             return AuthenticationResponse.success(Subject.builder()
                                                           .update(subject)
                                                           .addGrant(Role.builder()
-                                                                            .name(subject.getPrincipal().getName() + "_role")
+                                                                            .name(subject.principal().getName() + "_role")
                                                                             .origin(MAPPER_ORIGIN)
                                                                             .build())
                                                           .addGrant(Grant.builder()
@@ -163,7 +163,7 @@ public class SubjectMappingTest {
         }
 
         private AuthenticationResponse buildResponse(ProviderRequest providerRequest) {
-            return providerRequest.getEnv().getPath()
+            return providerRequest.env().path()
                     .map(path -> {
                         switch (path) {
                         case "fail":

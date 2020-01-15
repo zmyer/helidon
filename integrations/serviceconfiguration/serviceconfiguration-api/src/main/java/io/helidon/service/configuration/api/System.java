@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.helidon.service.configuration.api;
 
-import java.util.Collection; // for javadoc only
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -47,8 +47,6 @@ import java.util.Set;
  * #getProperties() properties} and {@linkplain #getenv() environment
  * values} are to be preferred over all others.</p>
  *
- * @author <a href="mailto:laird.nelson@oracle.com">Laird Nelson</a>
- *
  * @see #getSystems()
  *
  * @see #getenv()
@@ -56,7 +54,10 @@ import java.util.Set;
  * @see #getProperties()
  *
  * @see #isAuthoritative()
+ *
+ * @deprecated This class is slated for removal.
  */
+@Deprecated
 public abstract class System {
 
 

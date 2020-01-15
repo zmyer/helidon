@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+  Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@
         xmlns="http://maven.apache.org/POM/4.0.0"
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
+        <groupId>io.helidon.security.providers</groupId>
         <artifactId>helidon-security-providers-project</artifactId>
-        <groupId>io.helidon.security</groupId>
-        <version>0.10.6-SNAPSHOT</version>
+        <version>2.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>helidon-security-provider-idcs-mapper</artifactId>
+    <artifactId>helidon-security-providers-idcs-mapper</artifactId>
 
     <name>Helidon Security Providers IDCS Role Mapper</name>
 
@@ -37,38 +37,32 @@
         <dependency>
             <groupId>io.helidon.security</groupId>
             <artifactId>helidon-security</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.providers</groupId>
             <artifactId>helidon-security-providers-common</artifactId>
-            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.security.integration</groupId>
+            <artifactId>helidon-security-integration-common</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.security</groupId>
             <artifactId>helidon-security-jwt</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-provider-oidc-common</artifactId>
-            <version>${project.version}</version>
+            <groupId>io.helidon.security.providers</groupId>
+            <artifactId>helidon-security-providers-oidc-common</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.glassfish.jersey.core</groupId>
-            <artifactId>jersey-client</artifactId>
+            <groupId>io.helidon.jersey</groupId>
+            <artifactId>helidon-jersey-client</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>org.glassfish.jersey.inject</groupId>
-            <artifactId>jersey-hk2</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jersey.media</groupId>
-            <artifactId>jersey-media-json-processing</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>javax.activation</groupId>
-            <artifactId>javax.activation-api</artifactId>
+            <groupId>io.helidon.jersey</groupId>
+            <artifactId>helidon-jersey-media-jsonp</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

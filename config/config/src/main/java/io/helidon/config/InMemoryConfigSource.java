@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ class InMemoryConfigSource extends AbstractParsableConfigSource<Object> {
     InMemoryConfigSource(InMemoryConfigSource.Builder builder) {
         super(builder);
 
-        uri = builder.getUri();
-        content = builder.getContent();
+        uri = builder.uri();
+        content = builder.content();
     }
 
     @Override
@@ -56,16 +56,17 @@ class InMemoryConfigSource extends AbstractParsableConfigSource<Object> {
         return new Builder();
     }
 
-    static final class Builder extends AbstractParsableConfigSource.Builder<InMemoryConfigSource.Builder, Void> {
+    static final class Builder
+            extends AbstractParsableConfigSource.Builder<InMemoryConfigSource.Builder, Void, InMemoryConfigSource> {
 
         private String uri;
-        private ConfigParser.Content content;
+        private ConfigParser.Content<Object> content;
 
         Builder() {
             super(Void.class);
         }
 
-        Builder content(String uri, ConfigParser.Content content) {
+        Builder content(String uri, ConfigParser.Content<Object> content) {
             Objects.requireNonNull(uri, "uri cannot be null");
             Objects.requireNonNull(content, "content cannot be null");
 
@@ -82,11 +83,11 @@ class InMemoryConfigSource extends AbstractParsableConfigSource<Object> {
             return new InMemoryConfigSource(this);
         }
 
-        private String getUri() {
+        private String uri() {
             return uri;
         }
 
-        private ConfigParser.Content getContent() {
+        private ConfigParser.Content<Object> content() {
             return content;
         }
     }

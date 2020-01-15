@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,18 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Future;
 
-import com.netflix.hystrix.HystrixCommandProperties;
+import io.helidon.microprofile.faulttolerance.MethodAntn.LookupResult;
+
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
 import org.eclipse.microprofile.faulttolerance.Bulkhead;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.eclipse.microprofile.faulttolerance.Fallback;
 import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
-import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefinitionException;
+
+import static io.helidon.microprofile.faulttolerance.FaultToleranceParameter.getParameter;
+import static io.helidon.microprofile.faulttolerance.MethodAntn.lookupAnnotation;
 
 /**
  * Class MethodIntrospector.
@@ -38,29 +40,33 @@ class MethodIntrospector {
 
     private final Method method;
 
-    private final Retry retry;
+    private final Class<?> beanClass;
 
-    private final Fallback fallback;
+    private Retry retry;
 
-    private final CircuitBreaker circuitBreaker;
+    private Fallback fallback;
 
-    private final Timeout timeout;
+    private CircuitBreaker circuitBreaker;
 
-    private final Bulkhead bulkhead;
+    private Timeout timeout;
+
+    private Bulkhead bulkhead;
 
     /**
      * Constructor.
      *
      * @param method The method to introspect.
      */
-    MethodIntrospector(Method method) {
+    MethodIntrospector(Class<?> beanClass, Method method) {
+        this.beanClass = beanClass;
         this.method = method;
-        this.retry = isAnnotationPresent(Retry.class) ? new RetryAntn(method) : null;
-        this.fallback = isAnnotationPresent(Fallback.class) ? new FallbackAntn(method) : null;
-        this.circuitBreaker = isAnnotationPresent(CircuitBreaker.class) ? new CircuitBreakerAntn(method) : null;
-        this.timeout = isAnnotationPresent(Timeout.class) ? new TimeoutAntn(method) : null;
-        this.bulkhead = isAnnotationPresent(Bulkhead.class) ? new BulkheadAntn(method) : null;
-        validate();
+
+        this.retry = isAnnotationEnabled(Retry.class) ? new RetryAntn(beanClass, method) : null;
+        this.circuitBreaker = isAnnotationEnabled(CircuitBreaker.class)
+                ? new CircuitBreakerAntn(beanClass, method) : null;
+        this.timeout = isAnnotationEnabled(Timeout.class) ? new TimeoutAntn(beanClass, method) : null;
+        this.bulkhead = isAnnotationEnabled(Bulkhead.class) ? new BulkheadAntn(beanClass, method) : null;
+        this.fallback = isAnnotationEnabled(Fallback.class) ? new FallbackAntn(beanClass, method) : null;
     }
 
     Method getMethod() {
@@ -68,18 +74,13 @@ class MethodIntrospector {
     }
 
     /**
-     * Validates that use of annotations matches specification.
+     * Checks if {@code clazz} is assignable from the method's return type.
      *
-     * @throws FaultToleranceDefinitionException If validation fails.
+     * @param clazz The class.
+     * @return Outcome of test.
      */
-    private void validate() {
-        if (isAsynchronous()) {
-            final Class<?> returnType = method.getReturnType();
-            if (!Future.class.isAssignableFrom(returnType)) {
-                throw new FaultToleranceDefinitionException("Asynchronous method '" + method.getName()
-                                                            + "' must return Future");
-            }
-        }
+    boolean isReturnType(Class<?> clazz) {
+        return clazz.isAssignableFrom(method.getReturnType());
     }
 
     /**
@@ -109,7 +110,7 @@ class MethodIntrospector {
     }
 
     boolean isAsynchronous() {
-        return isAnnotationPresent(Asynchronous.class);
+        return isAnnotationEnabled(Asynchronous.class);
     }
 
     /**
@@ -161,19 +162,18 @@ class MethodIntrospector {
     Map<String, Object> getHystrixProperties() {
         final HashMap<String, Object> result = new HashMap<>();
 
-        // Isolation strategy
-        result.put("execution.isolation.strategy", HystrixCommandProperties.ExecutionIsolationStrategy.THREAD);
+        // Use semaphores for async and bulkhead
+        if (!isAsynchronous() && hasBulkhead()) {
+            result.put("execution.isolation.semaphore.maxConcurrentRequests", bulkhead.value());
+        }
 
         // Circuit breakers
         result.put("circuitBreaker.enabled", hasCircuitBreaker());
         if (hasCircuitBreaker()) {
-            final CircuitBreaker circuitBreaker = getCircuitBreaker();
-            result.put("circuitBreaker.requestVolumeThreshold",
-                       circuitBreaker.requestVolumeThreshold());
-            result.put("circuitBreaker.errorThresholdPercentage",
-                       (int) (circuitBreaker.failureRatio() * 100));
-            result.put("circuitBreaker.sleepWindowInMilliseconds",
-                       TimeUtil.convertToMillis(circuitBreaker.delay(), circuitBreaker.delayUnit()));
+            // We are implementing this logic internally, so set to high values
+            result.put("circuitBreaker.requestVolumeThreshold", Integer.MAX_VALUE);
+            result.put("circuitBreaker.errorThresholdPercentage", 100);
+            result.put("circuitBreaker.sleepWindowInMilliseconds", Long.MAX_VALUE);
         }
 
         // Timeouts
@@ -188,26 +188,40 @@ class MethodIntrospector {
     }
 
     /**
-     * Search for annotation first on the method and then its class. This method
-     * does not check if the annotation's target is of element type {@link
-     * java.lang.annotation.ElementType#TYPE}.
-     *
-     * @param clazz Annotation class to search for.
-     * @param <T> Annotation type.
-     * @return Annotation instance or {@code null} if not found.
-     */
-    private <T extends Annotation> T getAnnotation(Class<T> clazz) {
-        final T annotation = method.getAnnotation(clazz);
-        return annotation != null ? annotation : method.getDeclaringClass().getAnnotation(clazz);
-    }
-
-    /**
-     * Determines if annotation type is present on the method or its class.
+     * Determines if annotation type is present and enabled.
      *
      * @param clazz Annotation class to search for.
      * @return Outcome of test.
      */
-    private boolean isAnnotationPresent(Class<? extends Annotation> clazz) {
-        return getAnnotation(clazz) != null;
+    private boolean isAnnotationEnabled(Class<? extends Annotation> clazz) {
+        LookupResult<? extends Annotation> lookupResult = lookupAnnotation(beanClass, method, clazz);
+        if (lookupResult == null) {
+            return false;       // not present
+        }
+
+        String value;
+        final String annotationType = clazz.getSimpleName();
+
+        // Check if property defined at method level
+        value = getParameter(method.getDeclaringClass().getName(), method.getName(),
+                annotationType, "enabled");
+        if (value != null) {
+            return Boolean.valueOf(value);
+        }
+
+        // Check if property defined at class level
+        value = getParameter(method.getDeclaringClass().getName(), annotationType, "enabled");
+        if (value != null) {
+            return Boolean.valueOf(value);
+        }
+
+        // Check if property defined at global level
+        value = getParameter(annotationType, "enabled");
+        if (value != null) {
+            return Boolean.valueOf(value);
+        }
+
+        // Default is enabled
+        return clazz == Fallback.class || FaultToleranceExtension.isFaultToleranceEnabled();
     }
 }

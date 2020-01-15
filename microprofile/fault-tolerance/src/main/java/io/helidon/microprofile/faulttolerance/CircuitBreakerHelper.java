@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,10 @@ package io.helidon.microprofile.faulttolerance;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 
+import com.netflix.config.ConfigurationManager;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 
 /**
@@ -27,6 +30,10 @@ import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
  * in Hystrix, but we cannot easily access them.
  */
 public class CircuitBreakerHelper {
+    private static final Logger LOGGER = Logger.getLogger(CircuitBreakerHelper.class.getName());
+
+    private static final String FORCE_OPEN = "hystrix.command.%s.circuitBreaker.forceOpen";
+    private static final String FORCE_CLOSED = "hystrix.command.%s.circuitBreaker.forceClosed";
 
     /**
      * Internal state of a circuit breaker. We need to track this to implement
@@ -44,6 +51,10 @@ public class CircuitBreakerHelper {
         }
     }
 
+    /**
+     * Data associated with a command for the purpose of tracking a circuit
+     * breaker state.
+     */
     static class CommandData {
 
         private int size;
@@ -58,6 +69,8 @@ public class CircuitBreakerHelper {
 
         private long lastNanosRead;
 
+        private ReentrantLock lock = new ReentrantLock();
+
         CommandData(int capacity) {
             results = new boolean[capacity];
             size = 0;
@@ -65,13 +78,24 @@ public class CircuitBreakerHelper {
             lastNanosRead = System.nanoTime();
         }
 
+        ReentrantLock getLock() {
+            return lock;
+        }
+
         State getState() {
             return state;
+        }
+
+        long getCurrentStateNanos() {
+            return System.nanoTime() - lastNanosRead;
         }
 
         void setState(State newState) {
             if (state != newState) {
                 updateStateNanos(state);
+                if (newState == State.HALF_OPEN_MP) {
+                    successCount = 0;
+                }
                 state = newState;
             }
         }
@@ -138,13 +162,31 @@ public class CircuitBreakerHelper {
 
     private final FaultToleranceCommand command;
 
-    private final CommandData commandData;
+    private final CircuitBreaker circuitBreaker;
 
     CircuitBreakerHelper(FaultToleranceCommand command, CircuitBreaker circuitBreaker) {
         this.command = command;
-        this.commandData = COMMAND_STATS.computeIfAbsent(
-            command.getCommandKey().toString(),
-            d -> new CommandData(circuitBreaker.requestVolumeThreshold()));
+        this.circuitBreaker = circuitBreaker;
+    }
+
+    private CommandData getCommandData() {
+        return COMMAND_STATS.computeIfAbsent(
+                command.getCommandKey().toString(),
+                d -> new CommandData(circuitBreaker.requestVolumeThreshold()));
+    }
+
+    /**
+     * Reset internal state of command data. Normally, this should be called when
+     * returning to {@link State#CLOSED_MP} state. Since this is the same as the
+     * initial state, we remove it from the map and re-create it later if needed.
+     */
+    void resetCommandData() {
+        ReentrantLock lock = getCommandData().getLock();
+        if (lock.isLocked()) {
+            lock.unlock();
+        }
+        COMMAND_STATS.remove(command.getCommandKey().toString());
+        LOGGER.info("Discarded command data for " + command.getCommandKey());
     }
 
     /**
@@ -154,16 +196,16 @@ public class CircuitBreakerHelper {
      * @param result New result to push.
      */
     void pushResult(boolean result) {
-        commandData.pushResult(result);
+        getCommandData().pushResult(result);
     }
 
     /**
-     * Computes success ratio over a complete window.
+     * Returns nanos since switching to current state.
      *
-     * @return Success ratio or -1 if window is not complete.
+     * @return Nanos in state.
      */
-    double getSuccessRatio() {
-        return commandData.getSuccessRatio();
+    long getCurrentStateNanos() {
+        return getCommandData().getCurrentStateNanos();
     }
 
     /**
@@ -172,7 +214,7 @@ public class CircuitBreakerHelper {
      * @return Failure ratio or -1 if window is not complete.
      */
     double getFailureRatio() {
-        return commandData.getFailureRatio();
+        return getCommandData().getFailureRatio();
     }
 
     /**
@@ -181,15 +223,22 @@ public class CircuitBreakerHelper {
      * @return The state.
      */
     State getState() {
-        return commandData.getState();
+        return getCommandData().getState();
     }
 
     /**
      * Changes the state of a circuit breaker.
-     * @param newState
+     *
+     * @param newState New state.
      */
     void setState(State newState) {
-        commandData.setState(newState);
+        getCommandData().setState(newState);
+        if (newState == State.OPEN_MP) {
+            openBreaker();
+        } else {
+            closeBreaker();
+        }
+        LOGGER.info("Circuit breaker for " + command.getCommandKey() + " now in state " + getState());
     }
 
     /**
@@ -198,23 +247,28 @@ public class CircuitBreakerHelper {
      * @return Success count.
      */
     int getSuccessCount() {
-        return commandData.getSuccessCount();
+        return getCommandData().getSuccessCount();
     }
 
     /**
      * Increments success counter for breaker.
      */
     void incSuccessCount() {
-        commandData.incSuccessCount();
+        getCommandData().incSuccessCount();
     }
 
     /**
-     * Returns underlying object for sync purposes only.
-     *
-     * @return Command data as an object.
+     * Prevent concurrent access to underlying command data.
      */
-    Object getSyncObject() {
-        return commandData;
+    void lock() {
+        getCommandData().getLock().lock();
+    }
+
+    /**
+     * Unlock access to underlying command data.
+     */
+    void unlock() {
+        getCommandData().getLock().unlock();
     }
 
     /**
@@ -224,13 +278,28 @@ public class CircuitBreakerHelper {
      * @return The time spent in nanos.
      */
     long getInStateNanos(State queryState) {
-        return commandData.getInStateNanos(queryState);
+        return getCommandData().getInStateNanos(queryState);
     }
 
     /**
-     * Clear underlying command cache.
+     * Force Hystrix's circuit breaker into an open state.
      */
-    static void clearCache() {
-        COMMAND_STATS.clear();
+    private void openBreaker() {
+        if (!command.isCircuitBreakerOpen()) {
+            ConfigurationManager.getConfigInstance().setProperty(
+                    String.format(FORCE_OPEN, command.getCommandKey()), "true");
+        }
+    }
+
+    /**
+     * Force Hystrix's circuit breaker into a closed state.
+     */
+    private void closeBreaker() {
+        if (command.isCircuitBreakerOpen()) {
+            ConfigurationManager.getConfigInstance().setProperty(
+                    String.format(FORCE_OPEN, command.getCommandKey()), "false");
+            ConfigurationManager.getConfigInstance().setProperty(
+                    String.format(FORCE_CLOSED, command.getCommandKey()), "true");
+        }
     }
 }

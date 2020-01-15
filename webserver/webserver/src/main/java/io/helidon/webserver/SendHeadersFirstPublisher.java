@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@
 package io.helidon.webserver;
 
 import java.util.Objects;
-
-import io.helidon.common.reactive.Flow;
+import java.util.concurrent.Flow;
 
 import io.opentracing.Span;
 
@@ -104,7 +103,10 @@ class SendHeadersFirstPublisher<T> implements Flow.Publisher<T> {
         private void sendHeadersIfNeeded() {
             if (headers != null && !sent && !sentVolatile) {
                 synchronized (this) {
-                    if (!sent && !sentVolatile) {
+                    // no longer re-checking sent - reported by spotbugs as a "double check"
+                    // also it must be sufficient to check the volatile field, as it has the
+                    // same value
+                    if (!sentVolatile) {
                         sent = true;
                         sentVolatile = true;
                         headers.send();
@@ -128,11 +130,15 @@ class SendHeadersFirstPublisher<T> implements Flow.Publisher<T> {
         public void onComplete() {
             try {
                 sendHeadersIfNeeded();
-                delegate.onComplete();
-            } finally {
                 if (span != null) {
                     span.finish();
                 }
+                delegate.onComplete();
+            } catch (Exception e) {
+                if (span != null) {
+                    span.finish();      // no-op if called more than once
+                }
+                throw e;
             }
         }
     }

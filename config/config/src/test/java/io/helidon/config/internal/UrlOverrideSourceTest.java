@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,21 +18,21 @@ package io.helidon.config.internal;
 
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.concurrent.Flow;
 
-import io.helidon.common.reactive.Flow;
 import io.helidon.config.ConfigException;
 import io.helidon.config.OverrideSources;
 import io.helidon.config.spi.OverrideSource;
 import io.helidon.config.spi.PollingStrategy;
 
 import org.hamcrest.core.Is;
+import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link UrlOverrideSource}.
@@ -63,11 +63,9 @@ public class UrlOverrideSourceTest {
                 .changesMaxBuffer(1)
                 .build();
 
-        ConfigException ex = assertThrows(ConfigException.class, () -> {
-                overrideSource.load();
-        });
-        assertTrue(instanceOf(ConfigException.class).matches(ex.getCause()));
-        assertTrue(ex.getMessage().startsWith("Cannot load data from mandatory source"));
+        ConfigException ex = assertThrows(ConfigException.class, overrideSource::load);
+        assertThat(ex.getCause(), instanceOf(ConfigException.class));
+        assertThat(ex.getMessage(), startsWith("Cannot load data from mandatory source"));
     }
 
     @Test
@@ -76,8 +74,8 @@ public class UrlOverrideSourceTest {
         UrlOverrideSource.UrlBuilder builder = (UrlOverrideSource.UrlBuilder) OverrideSources.url(url)
                 .pollingStrategy(UrlOverrideSourceTest.TestingPathPollingStrategy::new);
 
-        assertThat(builder.getPollingStrategyInternal(), instanceOf(UrlOverrideSourceTest.TestingPathPollingStrategy.class));
-        assertThat(((UrlOverrideSourceTest.TestingPathPollingStrategy) builder.getPollingStrategyInternal()).getUrl(),
+        assertThat(builder.pollingStrategyInternal(), instanceOf(UrlOverrideSourceTest.TestingPathPollingStrategy.class));
+        assertThat(((UrlOverrideSourceTest.TestingPathPollingStrategy) builder.pollingStrategyInternal()).getUrl(),
                    Is.is(url));
     }
 

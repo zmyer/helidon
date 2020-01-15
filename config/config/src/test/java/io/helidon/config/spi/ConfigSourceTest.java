@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,24 +19,24 @@ package io.helidon.config.spi;
 import java.io.StringReader;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 
-import io.helidon.common.reactive.Flow;
 import io.helidon.config.ConfigParsers;
 import io.helidon.config.ConfigSources;
 import io.helidon.config.ValueNodeMatcher;
 import io.helidon.config.internal.PropertiesConfigParser;
 import io.helidon.config.spi.ConfigNode.ObjectNode;
 import io.helidon.config.test.infra.RestoreSystemPropertiesExt;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 import org.hamcrest.core.Is;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.fail;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
@@ -55,14 +55,14 @@ public class ConfigSourceTest {
 
     @Test
     public void testFromObjectNodeDescription() {
-        ConfigSource configSource = ConfigSources.from(ObjectNode.empty());
+        ConfigSource configSource = ConfigSources.create(ObjectNode.empty());
 
         assertThat(configSource.description(), is("InMemoryConfig[ObjectNode]"));
     }
 
     @Test
     public void testFromObjectNodeLoad() {
-        ConfigSource configSource = ConfigSources.from(ObjectNode.empty());
+        ConfigSource configSource = ConfigSources.create(ObjectNode.empty());
 
         configSource.init(mock(ConfigContext.class));
         assertThat(configSource.load().get().entrySet(), is(empty()));
@@ -71,7 +71,7 @@ public class ConfigSourceTest {
     @Test
     public void testFromReadableDescription() {
         ConfigSource configSource = ConfigSources
-                .from(new StringReader("aaa=bbb"), PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
+                .create(new StringReader("aaa=bbb"), PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
 
         assertThat(configSource.description(), is("InMemoryConfig[Readable]"));
     }
@@ -82,7 +82,7 @@ public class ConfigSourceTest {
         when(context.findParser(any())).thenReturn(Optional.of(ConfigParsers.properties()));
 
         ConfigSource configSource = ConfigSources
-                .from(new StringReader("aaa=bbb"), PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
+                .create(new StringReader("aaa=bbb"), PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
 
         configSource.init(context);
         assertThat(configSource.load().get().get("aaa"), ValueNodeMatcher.valueNode("bbb"));
@@ -91,7 +91,7 @@ public class ConfigSourceTest {
     @ExtendWith(RestoreSystemPropertiesExt.class)
     @Test
     public void testFromTextDescription() {
-        ConfigSource configSource = ConfigSources.from("aaa=bbb", PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
+        ConfigSource configSource = ConfigSources.create("aaa=bbb", PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
 
         assertThat(configSource.description(), is("InMemoryConfig[String]"));
     }
@@ -103,7 +103,7 @@ public class ConfigSourceTest {
                 argThat(PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES::equals)))
                 .thenReturn(Optional.of(ConfigParsers.properties()));
 
-        ConfigSource configSource = ConfigSources.from("aaa=bbb", PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
+        ConfigSource configSource = ConfigSources.create("aaa=bbb", PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
 
         configSource.init(context);
         assertThat(configSource.load().get().get("aaa"), ValueNodeMatcher.valueNode("bbb"));
@@ -113,7 +113,7 @@ public class ConfigSourceTest {
     public void testFromSystemPropertiesDescription() {
         ConfigSource configSource = ConfigSources.systemProperties();
 
-        assertThat(configSource.description(), is("MapConfig[sys-props]"));
+        assertThat(configSource.description(), is("SystemPropertiesConfig[]*"));
     }
 
     @Test
@@ -131,7 +131,7 @@ public class ConfigSourceTest {
     public void testFromEnvironmentVariablesDescription() {
         ConfigSource configSource = ConfigSources.environmentVariables();
 
-        assertThat(configSource.description(), is("MapConfig[env-vars]"));
+        assertThat(configSource.description(), is("EnvironmentVariablesConfig[]"));
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package io.helidon.common.reactive;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -26,6 +27,9 @@ import java.util.function.Consumer;
  * @param <T> the type of the {@code Subscriber}
  */
 public class SingleSubscriberHolder<T> {
+    private static final IllegalStateException ALREADY_CLOSED = new IllegalStateException("Publisher already closed.");
+    private static final IllegalStateException CANCELLED = new IllegalStateException("Canceled before any subscriber is "
+                                                                                     + "registered!");
 
     private final CompletableFuture<Flow.Subscriber<? super T>> subscriber = new CompletableFuture<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -35,7 +39,7 @@ public class SingleSubscriberHolder<T> {
      * <p>
      * In case the subscriber registration fails (e.g. the holder already holds a previously registered subscriber
      * or the holder has been {@link #close(Consumer) closed}), the newly registered subscriber is notified about the
-     * error by invoking it's {@link io.helidon.common.reactive.Flow.Subscriber#onError(Throwable) subscriber.onError} method.
+     * error by invoking it's {@link java.util.concurrent.Flow.Subscriber#onError(Throwable) subscriber.onError} method.
      *
      * @param subscriber subscriber to be registered in the holder.
      * @return {@code true} if the subscriber was successfully registered, {@code false} otherwise.
@@ -64,7 +68,7 @@ public class SingleSubscriberHolder<T> {
     /**
      * Mark the subscriber holder as closed.
      * <p>
-     * Invoking this method will ensure that any new attempts to {@link #register(io.helidon.common.reactive.Flow.Subscriber)
+     * Invoking this method will ensure that any new attempts to {@link #register(java.util.concurrent.Flow.Subscriber)
      * register} a new subscriber
      * would fail.
      * <p>
@@ -77,7 +81,7 @@ public class SingleSubscriberHolder<T> {
      *                          handler (e.g. in a previous invocation of this method).
      */
     public void close(Consumer<Flow.Subscriber<? super T>> completionHandler) {
-        if (!subscriber.completeExceptionally(new IllegalStateException("Publisher already closed."))
+        if (!subscriber.completeExceptionally(ALREADY_CLOSED)
                 && closed.compareAndSet(false, true)) {
 
             try {
@@ -92,10 +96,10 @@ public class SingleSubscriberHolder<T> {
     }
 
     /**
-     * Hard cancel - nothing is send to the subscriber but subscription is considered as canceled.
+     * Hard cancel - nothing is sent to the subscriber but subscription is considered as canceled.
      */
     public void cancel() {
-        subscriber.completeExceptionally(new IllegalStateException("Canceled before any subscriber is registered!"));
+        subscriber.completeExceptionally(CANCELLED);
         closed.set(true);
     }
 

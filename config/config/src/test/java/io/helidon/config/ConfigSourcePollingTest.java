@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,22 +17,22 @@
 package io.helidon.config;
 
 import java.util.Optional;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
-import io.helidon.common.reactive.Flow;
 import io.helidon.common.reactive.SubmissionPublisher;
 import io.helidon.config.spi.ConfigContext;
 import io.helidon.config.spi.ConfigNode.ObjectNode;
 import io.helidon.config.spi.ConfigSource;
 import io.helidon.config.spi.PollingStrategy;
 
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import org.junit.jupiter.api.Test;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -98,18 +98,20 @@ public class ConfigSourcePollingTest {
 
         // Make sure subscription occurs before firing events.
         assertThat("Subscriber did not register within expected time",
-                subscribeLatch.await(100, TimeUnit.MILLISECONDS),
-                is(true));
+                   subscribeLatch.await(100, TimeUnit.MILLISECONDS),
+                   is(true));
 
         myPollingStrategy.fireEvents();
         assertThat("Subscriber was notified of " + (EXPECTED_UPDATE_EVENTS_DELIVERED - nextLatch.getCount() + 1) +
-                        " events, not the expected number, within the expected time",
-                nextLatch.await(5000, TimeUnit.MILLISECONDS), is(true));
-        final Config config = Config.from(configSource);
-        assertEquals(
-                "subvalue1", config.get("app1.node.value.sub1").asString(), "value retrieved for app1.node.value.sub1 not as expected");
-        assertTrue(
-                config.get("app1.node.value").asBoolean(), "value retrieved for app1.node.value not as expected");
+                           " events, not the expected number, within the expected time",
+                   nextLatch.await(5000, TimeUnit.MILLISECONDS), is(true));
+        final Config config = Config.create(configSource);
+        assertThat("value retrieved for app1.node.value.sub1 not as expected",
+                   config.get("app1.node.value.sub1").asString().get(),
+                   is("subvalue1"));
+        assertThat("value retrieved for app1.node.value not as expected",
+                   config.get("app1.node.value").asBoolean(),
+                   is(ConfigValues.simpleValue(true)));
     }
 
     private class MyPollingStrategy implements PollingStrategy {

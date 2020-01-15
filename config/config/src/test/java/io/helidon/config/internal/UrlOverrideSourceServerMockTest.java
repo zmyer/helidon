@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
 import java.util.AbstractMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import io.helidon.common.CollectionsHelper;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
 import io.helidon.config.PollingStrategies;
@@ -32,11 +32,9 @@ import io.helidon.config.TestingConfigChangeSubscriber;
 import io.helidon.config.spi.OverrideSource;
 
 import com.xebialabs.restito.server.StubServer;
-
-import static io.helidon.config.ConfigSources.from;
-import static io.helidon.config.ConfigTest.waitForAssert;
-import static io.helidon.config.OverrideSources.url;
-import static io.helidon.config.internal.PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static com.xebialabs.restito.builder.stub.StubHttp.whenHttp;
 import static com.xebialabs.restito.semantics.Action.contentType;
@@ -45,14 +43,14 @@ import static com.xebialabs.restito.semantics.Action.status;
 import static com.xebialabs.restito.semantics.Action.stringContent;
 import static com.xebialabs.restito.semantics.Condition.method;
 import static com.xebialabs.restito.semantics.Condition.uri;
+import static io.helidon.config.ConfigTest.waitForAssert;
+import static io.helidon.config.OverrideSources.url;
+import static io.helidon.config.internal.PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES;
 import static org.glassfish.grizzly.http.Method.GET;
 import static org.glassfish.grizzly.http.Method.HEAD;
 import static org.glassfish.grizzly.http.util.HttpStatus.OK_200;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link UrlOverrideSource} with mocked source.
@@ -103,8 +101,8 @@ public class UrlOverrideSourceServerMockTest {
                 );
 
         Config config = Config.builder()
-                .sources(from(
-                        CollectionsHelper.mapOf(
+                .sources(ConfigSources.create(
+                        Map.of(
                                 "aaa.bbb.url", "URL0"
                         )))
                 .overrides(url(getUrl("/override", server.getPort())))
@@ -112,7 +110,7 @@ public class UrlOverrideSourceServerMockTest {
                 .disableSystemPropertiesSource()
                 .build();
 
-        waitForAssert(() -> config.get("aaa.bbb.url").asString(), is("URL1"));
+        waitForAssert(() -> config.get("aaa.bbb.url").asString().get(), is("URL1"));
     }
 
     @Test
@@ -135,8 +133,8 @@ public class UrlOverrideSourceServerMockTest {
                 );
 
         Config config = Config.builder()
-                .sources(from(
-                        CollectionsHelper.mapOf(
+                .sources(ConfigSources.create(
+                        Map.of(
                                 "aaa.bbb.url", "URL0"
                         )))
                 .overrides(url(getUrl("/override", server.getPort())))
@@ -144,7 +142,7 @@ public class UrlOverrideSourceServerMockTest {
                 .disableSystemPropertiesSource()
                 .build();
 
-        waitForAssert(() -> config.get("aaa.bbb.url").asString(), is("URL1"));
+        waitForAssert(() -> config.get("aaa.bbb.url").asString().get(), is("URL1"));
     }
 
     @Test
@@ -167,8 +165,8 @@ public class UrlOverrideSourceServerMockTest {
                 );
 
         Config config = Config.builder()
-                .sources(from(
-                        CollectionsHelper.mapOf(
+                .sources(ConfigSources.create(
+                        Map.of(
                                 "aaa.bbb.url", "URL0"
                         )))
                 .overrides(url(getUrl("/override", server.getPort())))
@@ -176,7 +174,7 @@ public class UrlOverrideSourceServerMockTest {
                 .disableSystemPropertiesSource()
                 .build();
 
-        waitForAssert(() -> config.get("aaa.bbb.url").asString(), is("URL2"));
+        waitForAssert(() -> config.get("aaa.bbb.url").asString().get(), is("URL2"));
     }
 
     @Test
@@ -206,7 +204,7 @@ public class UrlOverrideSourceServerMockTest {
                 .disableSystemPropertiesSource()
                 .build();
 
-        assertThat(config.get("aaa.bbb.url").asString(), is("URL1"));
+        assertThat(config.get("aaa.bbb.url").asString().get(), is("URL1"));
 
         // register subscriber
         TestingConfigChangeSubscriber subscriber = new TestingConfigChangeSubscriber();
@@ -225,7 +223,7 @@ public class UrlOverrideSourceServerMockTest {
         Config newConfig = subscriber.getLastOnNext(1000, true);
 
         // new: key exists
-        assertThat(newConfig.asString(), is("URL2"));
+        assertThat(newConfig.asString().get(), is("URL2"));
 
     }
 
@@ -256,7 +254,7 @@ public class UrlOverrideSourceServerMockTest {
                 .disableSystemPropertiesSource()
                 .build();
 
-        assertThat(config.get("aaa.bbb.url").asString(), is("URL1"));
+        assertThat(config.get("aaa.bbb.url").asString().get(), is("URL1"));
 
         whenHttp(server).
                 match(method(GET), uri("/override")).
@@ -266,7 +264,7 @@ public class UrlOverrideSourceServerMockTest {
                         stringContent(NO_WILDCARDS)
                 );
 
-        waitForAssert(() -> config.get("aaa.bbb.url").asStringSupplier().get(), is("URL0"));
+        waitForAssert(() -> config.get("aaa.bbb.url").asString().supplier().get(), is("URL0"));
 
     }
 
@@ -294,12 +292,12 @@ public class UrlOverrideSourceServerMockTest {
                                  .pollingStrategy(PollingStrategies.regular(Duration.ofMillis(10))))
                 .overrides(url(getUrl("/override", server.getPort()))
                                    .pollingStrategy(PollingStrategies.regular(Duration.ofMillis(10))))
-                //                .addFilter(new OverrideConfigFilter(CollectionsHelper.mapOf(Pattern.compile("\\w+\\.\\w+\\.url"), "URL1")))
+                //                .addFilter(new OverrideConfigFilter(Map.of(Pattern.compile("\\w+\\.\\w+\\.url"), "URL1")))
                 .disableEnvironmentVariablesSource()
                 .disableSystemPropertiesSource()
                 .build();
 
-        assertThat(config.get("aaa.bbb.url").asString(), is("URL1"));
+        assertThat(config.get("aaa.bbb.url").asString().get(), is("URL1"));
 
         whenHttp(server).
                 match(method(GET), uri("/config")).
@@ -309,7 +307,7 @@ public class UrlOverrideSourceServerMockTest {
                         stringContent(CONFIG2)
                 );
 
-        waitForAssert(() -> config.get("aaa.bbb.url").asOptionalStringSupplier().get(), is(Optional.empty()));
+        waitForAssert(() -> config.get("aaa.bbb.url").asString().optionalSupplier().get(), is(Optional.empty()));
 
     }
 
@@ -336,8 +334,8 @@ public class UrlOverrideSourceServerMockTest {
                 .sources(ConfigSources.url(getUrl("/config", server.getPort()))
                                  .pollingStrategy(PollingStrategies.regular(Duration.ofMillis(10))))
                 .overrides(url(getUrl("/override", server.getPort())))
-                .addFilter(new OverrideConfigFilter(() -> OverrideSource.OverrideData.fromWildcards(
-                        CollectionsHelper.mapOf("*.*.url", "URL1")
+                .addFilter(new OverrideConfigFilter(() -> OverrideSource.OverrideData.createFromWildcards(
+                        Map.of("*.*.url", "URL1")
                                 .entrySet()
                                 .stream()
                                 .map(e -> new AbstractMap.SimpleEntry<>(e.getKey(), e.getValue()))
@@ -346,7 +344,7 @@ public class UrlOverrideSourceServerMockTest {
                 .disableSystemPropertiesSource()
                 .build();
 
-        assertThat(config.get("aaa.bbb.url").asString(), is("URL1"));
+        assertThat(config.get("aaa.bbb.url").asString().get(), is("URL1"));
 
         whenHttp(server).
                 match(method(GET), uri("/config")).
@@ -356,7 +354,7 @@ public class UrlOverrideSourceServerMockTest {
                         stringContent(CONFIG2)
                 );
 
-        waitForAssert(() -> config.get("aaa.bbb.url").asOptionalStringSupplier().get(), is(Optional.empty()));
+        waitForAssert(() -> config.get("aaa.bbb.url").asString().optionalSupplier().get(), is(Optional.empty()));
 
     }
 

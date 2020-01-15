@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.util.Properties;
 import java.util.Set;
 
-import io.helidon.common.CollectionsHelper;
 import io.helidon.config.ConfigHelper;
 import io.helidon.config.spi.ConfigNode;
 import io.helidon.config.spi.ConfigNode.ValueNode;
@@ -35,8 +34,8 @@ public abstract class AbstractParsers1ConfigParser implements ConfigParser {
     private static final String MEDIA_TYPE_TEXT_JAVA_PROPERTIES = "text/x-java-properties";
 
     @Override
-    public Set<String> getSupportedMediaTypes() {
-        return CollectionsHelper.setOf(MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
+    public Set<String> supportedMediaTypes() {
+        return Set.of(MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
     }
 
     @Override
@@ -48,7 +47,7 @@ public abstract class AbstractParsers1ConfigParser implements ConfigParser {
             throw new ConfigParserException("Cannot read from source.", e);
         }
         ConfigNode.ObjectNode.Builder rootBuilder = ConfigNode.ObjectNode.builder();
-        properties.stringPropertyNames().forEach(k -> addValue(rootBuilder, k, ValueNode.from(properties.getProperty(k))));
+        properties.stringPropertyNames().forEach(k -> addValue(rootBuilder, k, ValueNode.create(properties.getProperty(k))));
         return rootBuilder.build();
     }
 

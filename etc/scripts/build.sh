@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018,2019 Oracle and/or its affiliates. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,16 +37,17 @@ fi
 # Path to the root of the workspace
 readonly WS_DIR=$(cd $(dirname -- "${SCRIPT_PATH}") ; cd ../.. ; pwd -P)
 
-source ${WS_DIR}/etc/scripts/wercker-env.sh
+source ${WS_DIR}/etc/scripts/pipeline-env.sh
 
-if [ "${WERCKER}" = "true" ] ; then
+if [ "${WERCKER}" = "true" -o "${GITLAB}" = "true" ] ; then
   apt-get update && apt-get -y install graphviz
 fi
 
 inject_credentials
 
 mvn -f ${WS_DIR}/pom.xml \
-    clean install \
-    -Pexamples,integrations,spotbugs,javadoc,docs,sources,ossrh-releases
+    clean install -e \
+    -B \
+    -Pexamples,integrations,archetypes,spotbugs,javadoc,docs,sources,tck,tests,pipeline
 
-examples/archetypes/test-archetypes.sh
+examples/quickstarts/archetypes/test-archetypes.sh

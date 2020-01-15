@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,8 @@
 package io.helidon.config;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import io.helidon.common.CollectionsHelper;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -29,7 +26,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import static io.helidon.config.Config.Type.LIST;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.both;
-import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -68,52 +64,15 @@ public class ConfigListImplTest extends ConfigComplexImplTest {
     @ParameterizedTest
     public void testValue(TestContext context) {
         init(context);
-        getConfigAndAssertEmpty(Config::value);
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsOptionalString(TestContext context) {
-        init(context);
-        getConfigAndAssertEmpty(Config::asOptionalString);
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsOptionalStringList(TestContext context) {
-        init(context);
-        assertThat(config("7").asStringList(),
-                   containsInAnyOrder("aaa-" + level(), "bbb-" + level(), "ccc-" + level()));
+        getConfigAndAssertEmpty(config -> config.asString().asOptional());
     }
 
     @MethodSource("initParams")
     @ParameterizedTest
     public void testAsOptionalListFromString(TestContext context) {
         init(context);
-        getConfigAndExpectMappingException(config -> config.asOptionalList(ValueConfigBean.class));
+        getConfigAndExpectMappingException(config -> config.asList(ValueConfigBean::fromConfig).get());
     }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsStringList(TestContext context) {
-        init(context);
-        assertThat(config("7").asStringList(),
-                   containsInAnyOrder("aaa-" + level(), "bbb-" + level(), "ccc-" + level()));
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsStringListWithDefault(TestContext context) {
-        init(context);
-        assertThat(config("7").asStringList(CollectionsHelper.listOf("default", "value")),
-                   containsInAnyOrder("aaa-" + level(), "bbb-" + level(), "ccc-" + level()));
-    }
-
-
 
     @Override
     @MethodSource("initParams")
@@ -139,74 +98,11 @@ public class ConfigListImplTest extends ConfigComplexImplTest {
         assertThat(allSubKeys, hasSize(subNodesNoObjects()));
     }
 
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testOptionalStringSupplier(TestContext context) {
-        init(context);
-        assertThat(config().asOptionalStringSupplier().get(), is(Optional.empty()));
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsOptionalStringListSupplier(TestContext context) {
-        init(context);
-        assertThat(config("7").asOptionalStringList().get(),
-                   containsInAnyOrder("aaa-" + level(), "bbb-" + level(), "ccc-" + level()));
-    }
-
     @MethodSource("initParams")
     @ParameterizedTest
     public void testAsOptionalListFromStringSupplier(TestContext context) {
         init(context);
-        getConfigAndExpectMappingException(config -> config.asOptionalList(ValueConfigBean.class));
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsStringSupplier(TestContext context) {
-        init(context);
-        getConfigAndExpectMissingException(config -> config.asStringSupplier().get());
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsStringWithDefaultSupplier(TestContext context) {
-        init(context);
-
-        String defaultValue = "default value";
-
-        assertThat(config().asSupplier(String.class, defaultValue).get(), is(defaultValue));
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsStringListSupplier(TestContext context) {
-        init(context);
-        assertThat(config("7").asStringListSupplier().get(),
-                   containsInAnyOrder("aaa-" + level(), "bbb-" + level(), "ccc-" + level()));
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsStringListWithDefaultSupplier(TestContext context) {
-        init(context);
-        assertThat(config("7").asStringListSupplier(CollectionsHelper.listOf("default", "value")).get(),
-                   containsInAnyOrder("aaa-" + level(), "bbb-" + level(), "ccc-" + level()));
-    }
-
-    @Override
-    @MethodSource("initParams")
-    @ParameterizedTest
-    public void testAsNodeListWithDefaultSupplier(TestContext context) {
-        init(context);
-        assertThat(nodeNames(config().asNodeListSupplier(CollectionsHelper.listOf(Config.empty())).get()),
-                   containsInAnyOrder(itemNames()));
+        getConfigAndExpectMappingException(config -> config.asList(ValueConfigBean.class).get());
     }
 
     @Override
@@ -225,8 +121,7 @@ public class ConfigListImplTest extends ConfigComplexImplTest {
     public void testTraverseWithPredicateSupplier(TestContext context) {
         init(context);
         List<Config.Key> allSubKeys = config()
-                .nodeSupplier()
-                .get()
+                .asNode()
                 .get()
                 // ignore whole list nodes
                 .traverse(node -> node.type() != Config.Type.OBJECT)
@@ -251,7 +146,7 @@ public class ConfigListImplTest extends ConfigComplexImplTest {
             VALUE	list-2.6
             LIST	list-2.7
          */
-        assertThat(config().nodeSupplier().get().get().toString(), both(startsWith("["))
+        assertThat(config().asNode().optionalSupplier().get().get().toString(), both(startsWith("["))
                 .and(endsWith(key() + "] LIST (elements: 8)")));
     }
 
@@ -356,14 +251,14 @@ public class ConfigListImplTest extends ConfigComplexImplTest {
 
     @Override
     protected ObjectConfigBean[] expectedObjectConfigBeans() {
-        return CollectionsHelper.listOf(new ObjectConfigBean("fromConfig", "key:0@VALUE"),
-                                        new ObjectConfigBean("fromConfig", "key:1@OBJECT"),
-                                        new ObjectConfigBean("fromConfig", "key:2@LIST"),
-                                        new ObjectConfigBean("fromConfig", "key:3@VALUE"),
-                                        new ObjectConfigBean("fromConfig", "key:4@VALUE"),
-                                        new ObjectConfigBean("fromConfig", "key:5@VALUE"),
-                                        new ObjectConfigBean("fromConfig", "key:6@VALUE"),
-                                        new ObjectConfigBean("fromConfig", "key:7@LIST"))
+        return List.of(new ObjectConfigBean("fromConfig", "key:0@VALUE"),
+                       new ObjectConfigBean("fromConfig", "key:1@OBJECT"),
+                       new ObjectConfigBean("fromConfig", "key:2@LIST"),
+                       new ObjectConfigBean("fromConfig", "key:3@VALUE"),
+                       new ObjectConfigBean("fromConfig", "key:4@VALUE"),
+                       new ObjectConfigBean("fromConfig", "key:5@VALUE"),
+                       new ObjectConfigBean("fromConfig", "key:6@VALUE"),
+                       new ObjectConfigBean("fromConfig", "key:7@LIST"))
                 .toArray(new ObjectConfigBean[0]);
     }
 

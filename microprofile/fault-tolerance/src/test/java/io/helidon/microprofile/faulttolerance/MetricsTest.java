@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,13 @@
 package io.helidon.microprofile.faulttolerance;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+
+import io.helidon.common.metrics.InternalBridge;
+import io.helidon.common.metrics.InternalBridge.Metadata.MetadataBuilder;
+import io.helidon.common.metrics.InternalBridge.MetricRegistry;
 
 import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException;
-import org.eclipse.microprofile.metrics.Metadata;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricType;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.junit.jupiter.api.Test;
@@ -54,10 +57,8 @@ import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.getMe
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Class MetricsTest.
@@ -66,37 +67,39 @@ public class MetricsTest extends FaultToleranceTest {
 
     @Test
     public void testEnable() {
-        assertTrue(enabled());
+        assertThat(enabled(), is(true));
     }
 
     @Test
     public void testInjectCounter() {
         MetricsBean bean = newBean(MetricsBean.class);
-        assertNotNull(bean);
+        assertThat(bean, notNullValue());
         bean.getCounter().inc();
-        assertEquals(1L, bean.getCounter().getCount());
+        assertThat(bean.getCounter().getCount(), is(1L));
     }
 
     @Test
     public void testInjectCounterProgrammatically() {
         MetricRegistry metricRegistry = getMetricRegistry();
-        metricRegistry.counter(new Metadata("dcounter",
-                                            "",
-                                            "",
-                                            MetricType.COUNTER,
-                                            MetricUnits.NONE));
+        metricRegistry.counter(newMetadataBuilder()
+                .withName("dcounter")
+                .withType(MetricType.COUNTER)
+                .withUnit(MetricUnits.NONE)
+                .build());
         metricRegistry.counter("dcounter").inc();
-        assertEquals(1L, metricRegistry.counter("dcounter").getCount());
+        assertThat(metricRegistry.counter("dcounter").getCount(), is(1L));
     }
 
     @Test
     public void testGlobalCountersSuccess() throws Exception {
         MetricsBean bean = newBean(MetricsBean.class);
         bean.retryOne(5);
-        assertEquals(1, getCounter(bean, "retryOne",
-                                   INVOCATIONS_TOTAL, int.class));
-        assertEquals(5, getCounter(bean, "retryOne",
-                                   INVOCATIONS_FAILED_TOTAL, int.class));
+        assertThat(getCounter(bean, "retryOne",
+                                   INVOCATIONS_TOTAL, int.class),
+                   is(1L));
+        assertThat(getCounter(bean, "retryOne",
+                                   INVOCATIONS_FAILED_TOTAL, int.class),
+                   is(0L));
     }
 
     @Test
@@ -107,24 +110,30 @@ public class MetricsTest extends FaultToleranceTest {
         } catch (Exception e) {
             // falls through
         }
-        assertEquals(0, getCounter(bean, "retryTwo",
-                                   INVOCATIONS_TOTAL, int.class));
-        assertEquals(6, getCounter(bean, "retryTwo",
-                                   INVOCATIONS_FAILED_TOTAL, int.class));
+        assertThat(getCounter(bean, "retryTwo",
+                              INVOCATIONS_TOTAL, int.class),
+                   is(1L));
+        assertThat(getCounter(bean, "retryTwo",
+                                   INVOCATIONS_FAILED_TOTAL, int.class),
+                   is(1L));
     }
 
     @Test
     public void testRetryCounters() throws Exception {
         MetricsBean bean = newBean(MetricsBean.class);
         bean.retryThree(5);
-        assertEquals(0, getCounter(bean, "retryThree",
-                                   RETRY_CALLS_SUCCEEDED_NOT_RETRIED_TOTAL, int.class));
-        assertEquals(1, getCounter(bean, "retryThree",
-                                   RETRY_CALLS_SUCCEEDED_RETRIED_TOTAL, int.class));
-        assertEquals(4, getCounter(bean, "retryThree",
-                                   RETRY_CALLS_FAILED_TOTAL, int.class));
-        assertEquals(5, getCounter(bean, "retryThree",
-                                   RETRY_RETRIES_TOTAL, int.class));
+        assertThat(getCounter(bean, "retryThree",
+                                   RETRY_CALLS_SUCCEEDED_NOT_RETRIED_TOTAL, int.class),
+                   is(0L));
+        assertThat(getCounter(bean, "retryThree",
+                                   RETRY_CALLS_SUCCEEDED_RETRIED_TOTAL, int.class),
+                   is(1L));
+        assertThat(getCounter(bean, "retryThree",
+                                   RETRY_CALLS_FAILED_TOTAL, int.class),
+                   is(0L));
+        assertThat(getCounter(bean, "retryThree",
+                                   RETRY_RETRIES_TOTAL, int.class),
+                   is(5L));
     }
 
     @Test
@@ -135,40 +144,51 @@ public class MetricsTest extends FaultToleranceTest {
         } catch (Exception e) {
             // falls through
         }
-        assertEquals(0, getCounter(bean, "retryFour",
-                                   RETRY_CALLS_SUCCEEDED_NOT_RETRIED_TOTAL, int.class));
-        assertEquals(0, getCounter(bean, "retryFour",
-                                   RETRY_CALLS_SUCCEEDED_RETRIED_TOTAL, int.class));
-        assertEquals(5, getCounter(bean, "retryFour",
-                                   RETRY_CALLS_FAILED_TOTAL, int.class));
-        assertEquals(5, getCounter(bean, "retryFour",
-                                   RETRY_RETRIES_TOTAL, int.class));
+        assertThat(getCounter(bean, "retryFour",
+                                   RETRY_CALLS_SUCCEEDED_NOT_RETRIED_TOTAL, int.class),
+                   is(0L));
+        assertThat(getCounter(bean, "retryFour",
+                                   RETRY_CALLS_SUCCEEDED_RETRIED_TOTAL, int.class),
+                   is(0L));
+        assertThat(getCounter(bean, "retryFour",
+                                   RETRY_CALLS_FAILED_TOTAL, int.class),
+                   is(1L));
+        assertThat(getCounter(bean, "retryFour",
+                                   RETRY_RETRIES_TOTAL, int.class),
+                   is(5L));
     }
 
     @Test
     public void testRetryCountersSuccess() throws Exception {
         MetricsBean bean = newBean(MetricsBean.class);
         bean.retryFive(0);
-        assertEquals(1, getCounter(bean, "retryFive",
-                                   RETRY_CALLS_SUCCEEDED_NOT_RETRIED_TOTAL, int.class));
-        assertEquals(0, getCounter(bean, "retryFive",
-                                   RETRY_CALLS_SUCCEEDED_RETRIED_TOTAL, int.class));
-        assertEquals(0, getCounter(bean, "retryFive",
-                                   RETRY_CALLS_FAILED_TOTAL, int.class));
-        assertEquals(0, getCounter(bean, "retryFive",
-                                   RETRY_RETRIES_TOTAL, int.class));
+        assertThat(getCounter(bean, "retryFive",
+                                   RETRY_CALLS_SUCCEEDED_NOT_RETRIED_TOTAL, int.class),
+                   is(1L));
+        assertThat(getCounter(bean, "retryFive",
+                                   RETRY_CALLS_SUCCEEDED_RETRIED_TOTAL, int.class),
+                   is(0L));
+        assertThat(getCounter(bean, "retryFive",
+                                   RETRY_CALLS_FAILED_TOTAL, int.class),
+                   is(0L));
+        assertThat(getCounter(bean, "retryFive",
+                                   RETRY_RETRIES_TOTAL, int.class),
+                   is(0L));
     }
 
     @Test
     public void testTimeoutSuccess() throws Exception {
         MetricsBean bean = newBean(MetricsBean.class);
         bean.noTimeout();
-        assertEquals(1, getHistogram(bean, "noTimeout",
-                                     TIMEOUT_EXECUTION_DURATION).getCount());
-        assertEquals(1, getCounter(bean, "noTimeout",
-                                   TIMEOUT_CALLS_NOT_TIMED_OUT_TOTAL));
-        assertEquals(0, getCounter(bean, "noTimeout",
-                                   TIMEOUT_CALLS_TIMED_OUT_TOTAL));
+        assertThat(getHistogram(bean, "noTimeout",
+                                     TIMEOUT_EXECUTION_DURATION).getCount(),
+                   is(1L));
+        assertThat(getCounter(bean, "noTimeout",
+                                   TIMEOUT_CALLS_NOT_TIMED_OUT_TOTAL),
+                   is(1L));
+        assertThat(getCounter(bean, "noTimeout",
+                                   TIMEOUT_CALLS_TIMED_OUT_TOTAL),
+                   is(0L));
     }
 
     @Test
@@ -179,32 +199,38 @@ public class MetricsTest extends FaultToleranceTest {
         } catch (Exception e) {
             // falls through
         }
-        assertEquals(1, getHistogram(bean, "forceTimeout",
-                                     TIMEOUT_EXECUTION_DURATION).getCount());
-        assertEquals(0, getCounter(bean, "forceTimeout",
-                                   TIMEOUT_CALLS_NOT_TIMED_OUT_TOTAL));
-        assertEquals(1, getCounter(bean, "forceTimeout",
-                                   TIMEOUT_CALLS_TIMED_OUT_TOTAL));
+        assertThat(getHistogram(bean, "forceTimeout",
+                                     TIMEOUT_EXECUTION_DURATION).getCount(),
+                   is(1L));
+        assertThat(getCounter(bean, "forceTimeout",
+                                   TIMEOUT_CALLS_NOT_TIMED_OUT_TOTAL),
+                   is(0L));
+        assertThat(getCounter(bean, "forceTimeout",
+                                   TIMEOUT_CALLS_TIMED_OUT_TOTAL),
+                   is(1L));
     }
 
     @Test
     public void testBreakerTrip() throws Exception {
         MetricsBean bean = newBean(MetricsBean.class);
+
         for (int i = 0; i < CircuitBreakerBean.REQUEST_VOLUME_THRESHOLD; i++) {
             assertThrows(RuntimeException.class, () -> bean.exerciseBreaker(false));
         }
-        Thread.sleep(1000);
         assertThrows(CircuitBreakerOpenException.class, () -> bean.exerciseBreaker(false));
 
-        assertEquals(1, getCounter(bean, "exerciseBreaker",
-                                   BREAKER_OPENED_TOTAL, boolean.class));
-        assertEquals(0, getCounter(bean, "exerciseBreaker",
-                                   BREAKER_CALLS_SUCCEEDED_TOTAL, boolean.class));
-        assertEquals(CircuitBreakerBean.REQUEST_VOLUME_THRESHOLD,
-                     getCounter(bean, "exerciseBreaker",
-                                BREAKER_CALLS_FAILED_TOTAL, boolean.class));
-        assertEquals(1, getCounter(bean, "exerciseBreaker",
-                                   BREAKER_CALLS_PREVENTED_TOTAL, boolean.class));
+        assertThat(getCounter(bean, "exerciseBreaker",
+                BREAKER_OPENED_TOTAL, boolean.class),
+                   is(1L));
+        assertThat(getCounter(bean, "exerciseBreaker",
+                                   BREAKER_CALLS_SUCCEEDED_TOTAL, boolean.class),
+                   is(0L));
+        assertThat(getCounter(bean, "exerciseBreaker",
+                                BREAKER_CALLS_FAILED_TOTAL, boolean.class),
+                   is((long)CircuitBreakerBean.REQUEST_VOLUME_THRESHOLD));
+        assertThat(getCounter(bean, "exerciseBreaker",
+                                   BREAKER_CALLS_PREVENTED_TOTAL, boolean.class),
+                   is(1L));
     }
 
     @Test
@@ -225,7 +251,6 @@ public class MetricsTest extends FaultToleranceTest {
 
         }
         assertThrows(RuntimeException.class, () -> bean.exerciseGauges(false));
-        Thread.sleep(1000);
         assertThrows(CircuitBreakerOpenException.class, () -> bean.exerciseGauges(false));
 
         assertThat(getGauge(bean, "exerciseGauges",
@@ -240,31 +265,93 @@ public class MetricsTest extends FaultToleranceTest {
     }
 
     @Test
+    public void testBreakerExceptionCounters() throws Exception {
+        MetricsBean bean = newBean(MetricsBean.class);
+
+        // First failure
+        assertThrows(MetricsBean.TestException.class, () -> bean.exerciseBreakerException(false));  // failure
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_CALLS_SUCCEEDED_TOTAL, boolean.class),
+                is(0L));
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_CALLS_FAILED_TOTAL, boolean.class),
+                is(1L));
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_OPENED_TOTAL, boolean.class),
+                is(0L));
+
+        // Second failure
+        assertThrows(MetricsBean.TestException.class, () -> bean.exerciseBreakerException(false));  // failure
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_CALLS_SUCCEEDED_TOTAL, boolean.class),
+                is(0L));
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_CALLS_FAILED_TOTAL, boolean.class),
+                is(2L));
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_OPENED_TOTAL, boolean.class),
+                is(1L));
+
+        assertThrows(Exception.class, () -> bean.exerciseBreakerException(true));  // failure
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_CALLS_SUCCEEDED_TOTAL, boolean.class),
+                is(0L));
+
+        // Sleep longer than circuit breaker delay
+        Thread.sleep(1500);
+
+        // Following calls should succeed due to FailOn
+        for (int i = 0; i < 2; i++) {
+            try {
+                bean.exerciseBreakerException(true);    // success
+            } catch (RuntimeException e) {
+                // expected
+            }
+        }
+
+        // Check counters after successful calls
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_CALLS_SUCCEEDED_TOTAL, boolean.class),
+                is(2L));
+
+        try {
+            bean.exerciseBreakerException(true);    // success
+        } catch (RuntimeException e) {
+            // expected
+        }
+
+        // Check counters after successful calls
+        assertThat(getCounter(bean, "exerciseBreakerException",
+                BREAKER_CALLS_SUCCEEDED_TOTAL, boolean.class),
+                is(3L));
+    }
+
+    @Test
     public void testFallbackMetrics() throws Exception {
         MetricsBean bean = newBean(MetricsBean.class);
-        assertEquals(0, getCounter(bean, "fallback", FALLBACK_CALLS_TOTAL));
+        assertThat(getCounter(bean, "fallback", FALLBACK_CALLS_TOTAL), is(0L));
         bean.fallback();
-        assertEquals(1, getCounter(bean, "fallback", FALLBACK_CALLS_TOTAL));
+        assertThat(getCounter(bean, "fallback", FALLBACK_CALLS_TOTAL), is(1L));
     }
 
     @Test
     public void testBulkheadMetrics() throws Exception {
         MetricsBean bean = newBean(MetricsBean.class);
-        CompletableFuture<String>[] calls = getConcurrentCalls(
+        Future<String>[] calls = getAsyncConcurrentCalls(
             () -> bean.concurrent(100), BulkheadBean.MAX_CONCURRENT_CALLS);
-        CompletableFuture.allOf(calls).get();
-        assertEquals(0,
-                     getGauge(bean, "concurrent",
-                              BULKHEAD_CONCURRENT_EXECUTIONS, long.class).getValue());
-        assertEquals(BulkheadBean.MAX_CONCURRENT_CALLS,
-                     getCounter(bean, "concurrent",
-                                BULKHEAD_CALLS_ACCEPTED_TOTAL, long.class));
-        assertEquals(0,
-                     getCounter(bean, "concurrent",
-                                BULKHEAD_CALLS_REJECTED_TOTAL, long.class));
-        assertEquals(BulkheadBean.MAX_CONCURRENT_CALLS,
-                     getHistogram(bean, "concurrent",
-                                  BULKHEAD_EXECUTION_DURATION, long.class).getCount());
+        getThreadNames(calls);
+        assertThat(getGauge(bean, "concurrent",
+                              BULKHEAD_CONCURRENT_EXECUTIONS, long.class).getValue(),
+                   is(0L));
+        assertThat(getCounter(bean, "concurrent",
+                                BULKHEAD_CALLS_ACCEPTED_TOTAL, long.class),
+                   is((long) BulkheadBean.MAX_CONCURRENT_CALLS));
+        assertThat(getCounter(bean, "concurrent",
+                                BULKHEAD_CALLS_REJECTED_TOTAL, long.class),
+                   is(0L));
+        assertThat(getHistogram(bean, "concurrent",
+                                  BULKHEAD_EXECUTION_DURATION, long.class).getCount(),
+                   is((long)BulkheadBean.MAX_CONCURRENT_CALLS));
     }
 
     @Test
@@ -279,8 +366,12 @@ public class MetricsTest extends FaultToleranceTest {
                 }
             }, BulkheadBean.MAX_CONCURRENT_CALLS);
         CompletableFuture.allOf(calls).get();
-        assertEquals(BulkheadBean.MAX_CONCURRENT_CALLS,
-                     getHistogram(bean, "concurrentAsync",
-                                  BULKHEAD_EXECUTION_DURATION, long.class).getCount());
+        assertThat(getHistogram(bean, "concurrentAsync",
+                                  BULKHEAD_EXECUTION_DURATION, long.class).getCount(),
+                   is((long)BulkheadBean.MAX_CONCURRENT_CALLS));
+    }
+
+    private static MetadataBuilder newMetadataBuilder() {
+        return  InternalBridge.newMetadataBuilder();
     }
 }

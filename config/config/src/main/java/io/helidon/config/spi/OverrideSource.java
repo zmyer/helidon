@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import io.helidon.common.CollectionsHelper;
 import io.helidon.config.Config;
+import io.helidon.config.ConfigException;
 
 /**
  * Source of config override settings.
@@ -61,10 +61,10 @@ public interface OverrideSource extends Source<OverrideSource.OverrideData>, Sup
     /**
      * Group of config override settings.
      * <p>
-     * <a name="wildcardSupport">{@code OverrideData} supports</a> the {@code *}
+     * <a id="wildcardSupport">{@code OverrideData} supports</a> the {@code *}
      * wildcard character which represents one or more regex word characters:
-     * [a-zA-Z_0-9]. In particular the {@link #from(java.io.Reader)} and
-     * {@link #fromWildcards} static factory methods deal with pairs of
+     * [a-zA-Z_0-9]. In particular the {@link #create(java.io.Reader)} and
+     * {@link #createFromWildcards} static factory methods deal with pairs of
      * {@code String}s; the first is a possible wildcard expression, and the
      * second is the replacement value the config system will use as it loads
      * any {@code Config} value node with a key that matches the wildcard
@@ -95,7 +95,7 @@ public interface OverrideSource extends Source<OverrideSource.OverrideData>, Sup
          * @param data the predicate/replacement pairs
          * @return {@code OverrideData} containing the specified pairs
          */
-        public static OverrideData from(List<Map.Entry<Predicate<Config.Key>, String>> data) {
+        public static OverrideData create(List<Map.Entry<Predicate<Config.Key>, String>> data) {
             return new OverrideData(data);
         }
 
@@ -110,7 +110,7 @@ public interface OverrideSource extends Source<OverrideSource.OverrideData>, Sup
          * {@code Predicate}/{@code String} pairs corresponding to the
          * wildcard/replacement pairs
          */
-        public static OverrideData fromWildcards(List<Map.Entry<String, String>> wildcards) {
+        public static OverrideData createFromWildcards(List<Map.Entry<String, String>> wildcards) {
             List<Map.Entry<Predicate<Config.Key>, String>> overrides = wildcards
                     .stream()
                     .map((e) -> new AbstractMap.SimpleEntry<>(
@@ -132,19 +132,21 @@ public interface OverrideSource extends Source<OverrideSource.OverrideData>, Sup
          *
          * @param reader a source
          * @return a new instance
-         * @throws IOException when an error occurred when reading from the
+         * @throws io.helidon.config.ConfigException when an error occurred when reading from the
          * reader
          */
-        public static OverrideData from(Reader reader) throws IOException {
+        public static OverrideData create(Reader reader) {
             OrderedProperties properties = new OrderedProperties();
             try (Reader autocloseableReader = reader) {
                 properties.load(autocloseableReader);
+            } catch (IOException e) {
+                throw new ConfigException("Cannot load data from reader.", e);
             }
-            List<Map.Entry<Predicate<Config.Key>, String>> data = properties.getOrderedMap().entrySet()
+            List<Map.Entry<Predicate<Config.Key>, String>> data = properties.orderedMap().entrySet()
                     .stream()
                     .map((e) -> new AbstractMap.SimpleEntry<>(WILDCARDS_TO_PREDICATE.apply(e.getKey()), e.getValue()))
                     .collect(Collectors.toList());
-            return from(data);
+            return create(data);
         }
 
         /**
@@ -153,7 +155,7 @@ public interface OverrideSource extends Source<OverrideSource.OverrideData>, Sup
          * @return an empty object
          */
         public static OverrideData empty() {
-            return new OverrideData(CollectionsHelper.listOf());
+            return new OverrideData(List.of());
         }
 
         /**

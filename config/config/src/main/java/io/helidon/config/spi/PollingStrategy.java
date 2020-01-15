@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@ package io.helidon.config.spi;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.Flow;
 import java.util.function.Supplier;
 
-import io.helidon.common.reactive.Flow;
 import io.helidon.config.Config;
 import io.helidon.config.PollingStrategies;
 
@@ -55,11 +55,11 @@ import io.helidon.config.PollingStrategies;
  * {@link AbstractParsableConfigSource} can use a different
  * {@code PollingStrategy}.
  * <p>
- * As described with {@link ConfigSource#from(Config)}, the config system can
+ * As described with {@link io.helidon.config.MetaConfig#configSource(io.helidon.config.Config)}, the config system can
  * load {@code ConfigSource}s using meta-configuration, which supports
  * specifying polling strategies. All {@link PollingStrategies built-in polling
  * strategies} and custom ones are supported. (The support is tightly connected
- * with {@link AbstractSource.Builder#init(Config) AbstractSource extensions}
+ * with {@link AbstractSource.Builder#config(Config) AbstractSource extensions}
  * and will not be automatically provided by any another config source
  * implementations.)
  * <p>
@@ -67,7 +67,7 @@ import io.helidon.config.PollingStrategies;
  * {@code polling-strategy} using the following nested {@code properties}:
  * <ul>
  * <li>{@code type} - name of the polling strategy implementation.
- * <table>
+ * <table class="config">
  * <caption>Built-in Polling Strategies</caption>
  * <tr>
  * <th>Name</th>
@@ -114,7 +114,7 @@ import io.helidon.config.PollingStrategies;
  * <p>
  * The implementation class should define a Java bean property for each
  * meta-configuration property it needs to support. The config system uses
- * {@link io.helidon.config.ConfigMapper}s to convert the text in the
+ * mapping functions to convert the text in the
  * meta-configuration into the correct Java type and then assigns the value to
  * the correspondingly-named Java bean property defined on the custom strategy
  * instance. See the built-in mappers defined in
@@ -127,7 +127,7 @@ import io.helidon.config.PollingStrategies;
  * attributes that are used to construct the associated {@code ConfigSource}. To
  * do so the custom implementation class should implement a constructor that
  * accepts the same Java type as that returned by the
- * {@link AbstractSource.Builder#getTarget()} method on the builder that is used
+ * {@link AbstractSource.Builder#target()} method on the builder that is used
  * to construct the {@code ConfigSource}.
  * <p>
  * For example, a custom polling strategy useful with {@code ConfigSource}s
@@ -198,7 +198,7 @@ public interface PollingStrategy extends Supplier<PollingStrategy> {
          *
          * @return event timestamp
          */
-        Instant getTimestamp();
+        Instant timestamp();
 
         /**
          * Creates a new instance of {@link PollingEvent} with
@@ -210,7 +210,7 @@ public interface PollingStrategy extends Supplier<PollingStrategy> {
             Instant timestamp = Instant.now();
             return new PollingEvent() {
                 @Override
-                public Instant getTimestamp() {
+                public Instant timestamp() {
                     return timestamp;
                 }
 

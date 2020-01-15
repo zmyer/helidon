@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,18 +17,18 @@
 package io.helidon.config.etcd;
 
 import java.io.StringReader;
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import io.helidon.common.OptionalHelper;
+import io.helidon.config.Config;
 import io.helidon.config.ConfigException;
 import io.helidon.config.ConfigHelper;
 import io.helidon.config.etcd.EtcdConfigSourceBuilder.EtcdEndpoint;
 import io.helidon.config.etcd.internal.client.EtcdClient;
 import io.helidon.config.etcd.internal.client.EtcdClientException;
-import io.helidon.config.etcd.internal.client.EtcdUtils;
 import io.helidon.config.spi.AbstractParsableConfigSource;
 import io.helidon.config.spi.ConfigParser;
 
@@ -39,7 +39,7 @@ import io.helidon.config.spi.ConfigParser;
  *
  * @see EtcdConfigSourceBuilder
  */
-class EtcdConfigSource extends AbstractParsableConfigSource<Long> {
+public class EtcdConfigSource extends AbstractParsableConfigSource<Long> {
 
     private static final Logger LOGGER = Logger.getLogger(EtcdConfigSource.class.getName());
 
@@ -49,31 +49,32 @@ class EtcdConfigSource extends AbstractParsableConfigSource<Long> {
     EtcdConfigSource(EtcdConfigSourceBuilder builder) {
         super(builder);
 
-        endpoint = builder.getTarget();
-        client = EtcdUtils.getClient(EtcdUtils.getClientClass(endpoint.getApi()), endpoint.getUri());
+        endpoint = builder.target();
+        client = endpoint.api()
+                .clientFactory()
+                .createClient(endpoint.uri());
     }
 
     @Override
-    protected String getMediaType() {
-        return OptionalHelper.from(Optional.ofNullable(super.getMediaType()))
+    protected String mediaType() {
+        return Optional.ofNullable(super.mediaType())
                 .or(this::probeContentType)
-                .asOptional()
                 .orElse(null);
     }
 
     private Optional<String> probeContentType() {
-        return Optional.ofNullable(ConfigHelper.detectContentType(Paths.get(endpoint.getKey())));
+        return Optional.ofNullable(ConfigHelper.detectContentType(Paths.get(endpoint.key())));
     }
 
     @Override
     protected String uid() {
-        return endpoint.getUri() + "#" + endpoint.getKey();
+        return endpoint.uri() + "#" + endpoint.key();
     }
 
     @Override
     protected Optional<Long> dataStamp() {
         try {
-            return Optional.of(getEtcdClient().revision(endpoint.getKey()));
+            return Optional.of(etcdClient().revision(endpoint.key()));
         } catch (EtcdClientException e) {
             return Optional.empty();
         }
@@ -83,24 +84,60 @@ class EtcdConfigSource extends AbstractParsableConfigSource<Long> {
     protected ConfigParser.Content<Long> content() throws ConfigException {
         String content = null;
         try {
-            content = getEtcdClient().get(endpoint.getKey());
+            content = etcdClient().get(endpoint.key());
         } catch (EtcdClientException e) {
             LOGGER.log(Level.FINEST, "Get operation threw an exception.", e);
         }
 
         // a KV pair does not exist
         if (content == null) {
-            throw new ConfigException(String.format("Key '%s' does not contain any value", endpoint.getKey()));
+            throw new ConfigException(String.format("Key '%s' does not contain any value", endpoint.key()));
         }
-        return ConfigParser.Content.from(new StringReader(content), getMediaType(), dataStamp());
+        return ConfigParser.Content.create(new StringReader(content), mediaType(), dataStamp());
     }
 
-    EtcdEndpoint getEtcdEndpoint() {
+    EtcdEndpoint etcdEndpoint() {
         return endpoint;
     }
 
-    EtcdClient getEtcdClient() {
+    EtcdClient etcdClient() {
         return client;
     }
 
+    /**
+     * Create a configured instance with the provided options.
+     *
+     * @param uri Remote etcd URI
+     * @param key key the configuration is associated with
+     * @param api api version
+     * @return a new etcd config source
+     */
+    public static EtcdConfigSource create(URI uri, String key, EtcdConfigSourceBuilder.EtcdApi api) {
+        return builder()
+                .uri(uri)
+                .key(key)
+                .api(api)
+                .build();
+    }
+
+    /**
+     * Create a new instance from configuration.
+     *
+     * @param metaConfig meta configuration to load config source from
+     * @return configured source instance
+     */
+    public static EtcdConfigSource create(Config metaConfig) {
+        return builder()
+                .config(metaConfig)
+                .build();
+    }
+
+    /**
+     * Create a new fluent API builder for etcd.
+     *
+     * @return a new builder
+     */
+    public static EtcdConfigSourceBuilder builder() {
+        return new EtcdConfigSourceBuilder();
+    }
 }

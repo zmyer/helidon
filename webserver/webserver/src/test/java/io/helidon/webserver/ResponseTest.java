@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,26 +20,25 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.http.Http;
 import io.helidon.common.http.MediaType;
-import io.helidon.common.reactive.Flow;
-import io.helidon.common.reactive.ReactiveStreamsAdapter;
-import io.helidon.webserver.spi.BareResponse;
+import io.helidon.common.reactive.Single;
 
 import io.opentracing.SpanContext;
 import org.junit.jupiter.api.Test;
-import reactor.core.publisher.Mono;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Tests {@link Response}.
@@ -57,15 +56,15 @@ public class ResponseTest {
         // Close all
         Response response = new ResponseImpl(null, br);
         close(response);
-        assertEquals("h200c", sb.toString());
+        assertThat(sb.toString(), is("h200c"));
         // Close first headers and then al
         sb.setLength(0);
         response = new ResponseImpl(null, br);
         response.status(300);
         response.headers().send().toCompletableFuture().get();
-        assertEquals("h300", sb.toString());
+        assertThat(sb.toString(), is("h300"));
         close(response);
-        assertEquals("h300c", sb.toString());
+        assertThat(sb.toString(), is("h300c"));
     }
 
     @Test
@@ -114,39 +113,39 @@ public class ResponseTest {
     public void classRelatedWriters() throws Exception {
         StringBuilder sb = new StringBuilder();
         Response response = new ResponseImpl(null, new NoOpBareResponse(null));
-        assertNotNull(response.createPublisherUsingWriter("foo")); // Default
-        assertNotNull(response.createPublisherUsingWriter("foo".getBytes())); // Default
-        assertNull(response.createPublisherUsingWriter(Duration.of(1, ChronoUnit.MINUTES)));
+        assertThat(response.createPublisherUsingWriter("foo"), notNullValue()); // Default
+        assertThat(response.createPublisherUsingWriter("foo".getBytes()), notNullValue()); // Default
+        assertThat(response.createPublisherUsingWriter(Duration.of(1, ChronoUnit.MINUTES)), nullValue());
         response.registerWriter(CharSequence.class, o -> {
             sb.append("1");
-            return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+            return Single.empty();
         });
-        assertNotNull(response.createPublisherUsingWriter("foo"));
-        assertEquals("1", sb.toString());
+        assertThat(response.createPublisherUsingWriter("foo"), notNullValue());
+        assertThat(sb.toString(), is("1"));
 
         sb.setLength(0);
-        assertNotNull(response.createPublisherUsingWriter(null));
-        assertEquals("", sb.toString());
+        assertThat(response.createPublisherUsingWriter(null), notNullValue());
+        assertThat(sb.toString(), is(""));
 
         sb.setLength(0);
         response.registerWriter(String.class, o -> {
             sb.append("2");
-            return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+            return Single.empty();
         });
-        assertNotNull(response.createPublisherUsingWriter("foo"));
-        assertEquals("2", sb.toString());
+        assertThat(response.createPublisherUsingWriter("foo"), notNullValue());
+        assertThat(sb.toString(), is("2"));
 
         sb.setLength(0);
-        assertNotNull(response.createPublisherUsingWriter(new StringBuilder()));
-        assertEquals("1", sb.toString());
+        assertThat(response.createPublisherUsingWriter(new StringBuilder()), notNullValue());
+        assertThat(sb.toString(), is("1"));
 
         sb.setLength(0);
         response.registerWriter((Class<Object>) null, o -> {
             sb.append("3");
-            return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+            return Single.empty();
         });
-        assertNotNull(response.createPublisherUsingWriter(1));
-        assertEquals("3", sb.toString());
+        assertThat(response.createPublisherUsingWriter(1), notNullValue());
+        assertThat(sb.toString(), is("3"));
     }
 
     @Test
@@ -156,23 +155,23 @@ public class ResponseTest {
         response.registerWriter(o -> "1".equals(String.valueOf(o)),
                                 o -> {
                                     sb.append("1");
-                                    return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+                                    return Single.empty();
                                 });
         response.registerWriter(o -> "2".equals(String.valueOf(o)),
                                 o -> {
                                     sb.append("2");
-                                    return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+                                    return Single.empty();
                                 });
-        assertNotNull(response.createPublisherUsingWriter(1));
-        assertEquals("1", sb.toString());
+        assertThat(response.createPublisherUsingWriter(1), notNullValue());
+        assertThat(sb.toString(), is("1"));
 
         sb.setLength(0);
-        assertNotNull(response.createPublisherUsingWriter(2));
-        assertEquals("2", sb.toString());
+        assertThat(response.createPublisherUsingWriter(2), notNullValue());
+        assertThat(sb.toString(), is("2"));
 
         sb.setLength(0);
-        assertNull(response.createPublisherUsingWriter(3));
-        assertEquals("", sb.toString());
+        assertThat(response.createPublisherUsingWriter(3), nullValue());
+        assertThat(sb.toString(), is(""));
     }
 
     @Test
@@ -183,35 +182,35 @@ public class ResponseTest {
                                 MediaType.TEXT_PLAIN,
                                 o -> {
                                     sb.append("A");
-                                    return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+                                    return Single.empty();
                                 });
         response.registerWriter(o -> o instanceof Number,
                                 MediaType.APPLICATION_JSON,
                                 o -> {
                                     sb.append("B");
-                                    return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+                                    return Single.empty();
                                 });
-        assertNotNull(response.createPublisherUsingWriter("foo"));
-        assertEquals("A", sb.toString());
-        assertEquals(MediaType.TEXT_PLAIN, response.headers().contentType().orElse(null));
+        assertThat(response.createPublisherUsingWriter("foo"), notNullValue());
+        assertThat(sb.toString(), is("A"));
+        assertThat(response.headers().contentType().orElse(null), is(MediaType.TEXT_PLAIN));
 
         sb.setLength(0);
         response.headers().remove(Http.Header.CONTENT_TYPE);
-        assertNotNull(response.createPublisherUsingWriter(1));
-        assertEquals("B", sb.toString());
-        assertEquals(MediaType.APPLICATION_JSON, response.headers().contentType().orElse(null));
+        assertThat(response.createPublisherUsingWriter(1), notNullValue());
+        assertThat(sb.toString(), is("B"));
+        assertThat(response.headers().contentType().orElse(null), is(MediaType.APPLICATION_JSON));
 
         sb.setLength(0);
         response.headers().put(Http.Header.CONTENT_TYPE, MediaType.APPLICATION_JSON.toString());
-        assertNotNull(response.createPublisherUsingWriter(1));
-        assertEquals("B", sb.toString());
-        assertEquals(MediaType.APPLICATION_JSON, response.headers().contentType().orElse(null));
+        assertThat(response.createPublisherUsingWriter(1), notNullValue());
+        assertThat(sb.toString(), is("B"));
+        assertThat(response.headers().contentType().orElse(null), is(MediaType.APPLICATION_JSON));
 
         sb.setLength(0);
         response.headers().put(Http.Header.CONTENT_TYPE, MediaType.TEXT_HTML.toString());
-        assertNull(response.createPublisherUsingWriter(1));
-        assertEquals("", sb.toString());
-        assertEquals(MediaType.TEXT_HTML, response.headers().contentType().orElse(null));
+        assertThat(response.createPublisherUsingWriter(1), nullValue());
+        assertThat(sb.toString(), is(""));
+        assertThat(response.headers().contentType().orElse(null), is(MediaType.TEXT_HTML));
     }
 
     @Test
@@ -230,8 +229,8 @@ public class ResponseTest {
             sb.append("C");
             return p;
         });
-        assertNotNull(response.applyFilters(ReactiveStreamsAdapter.publisherToFlow(Mono.empty()), null));
-        assertEquals("ABC", sb.toString());
+        assertThat(response.applyFilters(Single.empty(), null), notNullValue());
+        assertThat(sb.toString(), is("ABC"));
     }
 
     static class ResponseImpl extends Response {
@@ -241,8 +240,8 @@ public class ResponseTest {
         }
 
         @Override
-        SpanContext spanContext() {
-            return null;
+        Optional<SpanContext> spanContext() {
+            return Optional.empty();
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,26 +16,25 @@
 
 package io.helidon.config.spi;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Flow;
 
-import io.helidon.common.CollectionsHelper;
-import io.helidon.common.reactive.Flow;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigParsers;
 import io.helidon.config.ConfigSources;
 import io.helidon.config.spi.ConfigNode.ObjectNode;
 
+import org.junit.jupiter.api.Test;
+
 import static io.helidon.config.ValueNodeMatcher.valueNode;
 import static io.helidon.config.internal.PropertiesConfigParser.MEDIA_TYPE_TEXT_JAVA_PROPERTIES;
 import static io.helidon.config.spi.AbstractSource.Builder.DEFAULT_CHANGES_EXECUTOR;
 import static org.hamcrest.MatcherAssert.assertThat;
-
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
-import static org.hamcrest.Matchers.sameInstance;
-import org.junit.jupiter.api.Test;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -49,10 +48,10 @@ public class AbstractConfigSourceTest {
         TestingConfigSource.Builder builder = TestingConfigSource.builder();
 
         assertThat(builder.isMandatory(), is(true));
-        assertThat(builder.getChangesExecutor(), is(DEFAULT_CHANGES_EXECUTOR));
-        assertThat(builder.getChangesMaxBuffer(), is(Flow.defaultBufferSize()));
-        assertThat(builder.getMediaTypeMapping(), is(nullValue()));
-        assertThat(builder.getParserMapping(), is(nullValue()));
+        assertThat(builder.changesExecutor(), is(DEFAULT_CHANGES_EXECUTOR));
+        assertThat(builder.changesMaxBuffer(), is(Flow.defaultBufferSize()));
+        assertThat(builder.mediaTypeMapping(), is(nullValue()));
+        assertThat(builder.parserMapping(), is(nullValue()));
     }
 
     @Test
@@ -97,8 +96,8 @@ public class AbstractConfigSourceTest {
                 .changesExecutor(myExecutor)
                 .changesMaxBuffer(1);
 
-        assertThat(builder.getChangesExecutor(), is(myExecutor));
-        assertThat(builder.getChangesMaxBuffer(), is(1));
+        assertThat(builder.changesExecutor(), is(myExecutor));
+        assertThat(builder.changesMaxBuffer(), is(1));
     }
 
     @Test
@@ -161,8 +160,8 @@ public class AbstractConfigSourceTest {
         when(context.findParser(MEDIA_TYPE_TEXT_JAVA_PROPERTIES))
                 .thenReturn(Optional.of(new ConfigParser() { //NOT used parser
                     @Override
-                    public Set<String> getSupportedMediaTypes() {
-                        return CollectionsHelper.setOf(MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
+                    public Set<String> supportedMediaTypes() {
+                        return Set.of(MEDIA_TYPE_TEXT_JAVA_PROPERTIES);
                     }
 
                     @Override
@@ -187,36 +186,23 @@ public class AbstractConfigSourceTest {
     }
 
     @Test
-    public void testCompositeBuilderSupplierGetOnce() {
-        AbstractConfigSource.Builder builder = new AbstractConfigSource.Builder(Void.class) {
-            @Override
-            public ConfigSource build() {
-                return Optional::empty;
-            }
-        };
-
-        ConfigSource configSource = builder.get();
-        assertThat(configSource, sameInstance(builder.get()));
-    }
-
-    @Test
     public void testInitAll() {
-        TestingConfigSource.TestingBuilder builder = TestingConfigSource.builder().init(Config.from(ConfigSources.from(
-                CollectionsHelper.mapOf("media-type-mapping.yaml", "application/x-yaml",
+        TestingConfigSource.TestingBuilder builder = TestingConfigSource.builder().config(Config.create(ConfigSources.create(
+                Map.of("media-type-mapping.yaml", "application/x-yaml",
                        "media-type-mapping.password", "application/base64"))));
 
         //media-type-mapping
-        assertThat(builder.getMediaTypeMapping().apply(Config.Key.of("yaml")), is("application/x-yaml"));
-        assertThat(builder.getMediaTypeMapping().apply(Config.Key.of("password")), is("application/base64"));
-        assertThat(builder.getMediaTypeMapping().apply(Config.Key.of("unknown")), is(nullValue()));
+        assertThat(builder.mediaTypeMapping().apply(Config.Key.create("yaml")), is("application/x-yaml"));
+        assertThat(builder.mediaTypeMapping().apply(Config.Key.create("password")), is("application/base64"));
+        assertThat(builder.mediaTypeMapping().apply(Config.Key.create("unknown")), is(nullValue()));
     }
 
     @Test
     public void testInitNothing() {
-        TestingConfigSource.TestingBuilder builder = TestingConfigSource.builder().init((Config.empty()));
+        TestingConfigSource.TestingBuilder builder = TestingConfigSource.builder().config((Config.empty()));
 
         //media-type-mapping
-        assertThat(builder.getMediaTypeMapping(), is(nullValue()));
+        assertThat(builder.mediaTypeMapping(), is(nullValue()));
     }
 
 }

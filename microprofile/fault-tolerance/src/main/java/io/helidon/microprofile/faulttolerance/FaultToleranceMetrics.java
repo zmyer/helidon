@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,28 +17,30 @@
 package io.helidon.microprofile.faulttolerance;
 
 import java.lang.reflect.Method;
-import java.util.logging.Logger;
+import java.util.Collections;
 
 import javax.enterprise.inject.spi.CDI;
+
+import io.helidon.common.metrics.InternalBridge.MetricID;
+import io.helidon.common.metrics.InternalBridge.MetricRegistry;
 
 import org.eclipse.microprofile.metrics.Counter;
 import org.eclipse.microprofile.metrics.Gauge;
 import org.eclipse.microprofile.metrics.Histogram;
-import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.Metric;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricType;
 import org.eclipse.microprofile.metrics.MetricUnits;
 
+import static io.helidon.common.metrics.InternalBridge.Metadata.newMetadata;
 import static io.helidon.microprofile.faulttolerance.FaultToleranceExtension.getRealClass;
+import static io.helidon.microprofile.faulttolerance.FaultToleranceExtension.isFaultToleranceMetricsEnabled;
 
 /**
  * Class FaultToleranceMetrics.
  */
 class FaultToleranceMetrics {
-    private static final Logger LOGGER = Logger.getLogger(FaultToleranceMetrics.class.getName());
 
-    private static final String METRIC_NAME_TEMPLATE = "ft.%s.%s.%s";
+    static final String METRIC_NAME_TEMPLATE = "ft.%s.%s.%s";
 
     private static MetricRegistry metricRegistry;
 
@@ -58,10 +60,10 @@ class FaultToleranceMetrics {
 
     @SuppressWarnings("unchecked")
     static <T extends Metric> T getMetric(Method method, String name) {
-        String metricName = String.format(METRIC_NAME_TEMPLATE,
-                                          method.getDeclaringClass().getName(),
-                                          method.getName(), name);
-        return (T) getMetricRegistry().getMetrics().get(metricName);
+        MetricID metricID = newMetricID(String.format(METRIC_NAME_TEMPLATE,
+                method.getDeclaringClass().getName(),
+                method.getName(), name));
+        return (T) getMetricRegistry().getBridgeMetrics().get(metricID);
     }
 
     static Counter getCounter(Method method, String name) {
@@ -106,6 +108,10 @@ class FaultToleranceMetrics {
      * @param method The method.
      */
     static void registerMetrics(Method method) {
+        if (!isFaultToleranceMetricsEnabled()) {
+            return;
+        }
+
         registerCounter(
             String.format(METRIC_NAME_TEMPLATE,
                           method.getDeclaringClass().getName(),
@@ -130,6 +136,10 @@ class FaultToleranceMetrics {
     static final String RETRY_RETRIES_TOTAL = "retry.retries.total";
 
     static void registerRetryMetrics(Method method) {
+        if (!isFaultToleranceMetricsEnabled()) {
+            return;
+        }
+
         registerCounter(
             String.format(METRIC_NAME_TEMPLATE,
                           method.getDeclaringClass().getName(),
@@ -164,6 +174,10 @@ class FaultToleranceMetrics {
     static final String TIMEOUT_CALLS_NOT_TIMED_OUT_TOTAL = "timeout.callsNotTimedOut.total";
 
     static void registerTimeoutMetrics(Method method) {
+        if (!isFaultToleranceMetricsEnabled()) {
+            return;
+        }
+
         registerHistogram(
             String.format(METRIC_NAME_TEMPLATE,
                           method.getDeclaringClass().getName(),
@@ -196,6 +210,10 @@ class FaultToleranceMetrics {
     static final String BREAKER_HALF_OPEN_TOTAL = "circuitbreaker.halfOpen.total";
 
     static void registerCircuitBreakerMetrics(Method method) {
+        if (!isFaultToleranceMetricsEnabled()) {
+            return;
+        }
+
         registerCounter(
             String.format(METRIC_NAME_TEMPLATE,
                           method.getDeclaringClass().getName(),
@@ -228,6 +246,10 @@ class FaultToleranceMetrics {
     static final String FALLBACK_CALLS_TOTAL = "fallback.calls.total";
 
     static void registerFallbackMetrics(Method method) {
+        if (!isFaultToleranceMetricsEnabled()) {
+            return;
+        }
+
         registerCounter(
             String.format(METRIC_NAME_TEMPLATE,
                           method.getDeclaringClass().getName(),
@@ -246,6 +268,10 @@ class FaultToleranceMetrics {
     static final String BULKHEAD_WAITING_DURATION = "bulkhead.waiting.duration";
 
     static void registerBulkheadMetrics(Method method) {
+        if (!isFaultToleranceMetricsEnabled()) {
+            return;
+        }
+
         registerCounter(
             String.format(METRIC_NAME_TEMPLATE,
                           method.getDeclaringClass().getName(),
@@ -265,12 +291,6 @@ class FaultToleranceMetrics {
                           BULKHEAD_EXECUTION_DURATION),
             "Histogram of method execution times. This does not include any "
             + "time spent waiting in the bulkhead queue.");
-        registerHistogram(
-            String.format(METRIC_NAME_TEMPLATE,
-                          method.getDeclaringClass().getName(),
-                          method.getName(),
-                          BULKHEAD_WAITING_DURATION),
-            "Histogram of the time executions spend waiting in the queue");
     }
 
     // -- Utility methods ----------------------------------------------------
@@ -283,11 +303,9 @@ class FaultToleranceMetrics {
      * @return The counter created.
      */
     private static Counter registerCounter(String name, String description) {
-        return getMetricRegistry().counter(new Metadata(name,
-                                                        name,
-                                                        description,
-                                                        MetricType.COUNTER,
-                                                        MetricUnits.NONE));
+        return getMetricRegistry().counter(
+                newMetadata(name, name, description, MetricType.COUNTER, MetricUnits.NONE,
+                        true, Collections.emptyMap()));
     }
 
     /**
@@ -297,12 +315,10 @@ class FaultToleranceMetrics {
      * @param description Description of histogram.
      * @return The histogram created.
      */
-    private static Histogram registerHistogram(String name, String description) {
-        return getMetricRegistry().histogram(new Metadata(name,
-                                                          name,
-                                                          description,
-                                                          MetricType.HISTOGRAM,
-                                                          MetricUnits.NANOSECONDS));
+    static Histogram registerHistogram(String name, String description) {
+        return getMetricRegistry().histogram(
+                newMetadata(name, name, description, MetricType.HISTOGRAM, MetricUnits.NANOSECONDS,
+                        true, Collections.emptyMap()));
     }
 
     /**
@@ -315,18 +331,22 @@ class FaultToleranceMetrics {
      */
     @SuppressWarnings("unchecked")
     static synchronized <T> Gauge<T> registerGauge(Method method, String metricName, String description, Gauge<T> gauge) {
-        String name = String.format(METRIC_NAME_TEMPLATE,
-                                    method.getDeclaringClass().getName(),
-                                    method.getName(),
-                                    metricName);
-        Gauge<T> existing = getMetricRegistry().getGauges().get(name);
+        MetricID metricID = newMetricID(String.format(METRIC_NAME_TEMPLATE,
+                method.getDeclaringClass().getName(),
+                method.getName(),
+                metricName));
+        Gauge<T> existing = getMetricRegistry().getBridgeGauges().get(metricID);
         if (existing == null) {
-            getMetricRegistry().register(new Metadata(name,
-                                                      name,
-                                                      description,
-                                                      MetricType.GAUGE,
-                                                      MetricUnits.NANOSECONDS), gauge);
+            getMetricRegistry().register(
+                    newMetadata(metricID.getName(), metricID.getName(), description, MetricType.GAUGE, MetricUnits.NANOSECONDS,
+                            true, Collections.emptyMap()),
+                    gauge);
         }
         return existing;
     }
+
+    private static MetricID newMetricID(String name) {
+        return MetricID.Factory.INSTANCE.newMetricID(name);
+    }
+
 }

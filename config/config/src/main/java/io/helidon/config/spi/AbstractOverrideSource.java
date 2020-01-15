@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,7 @@
 package io.helidon.config.spi;
 
 import java.util.Optional;
-import java.util.function.Supplier;
-
-import io.helidon.common.reactive.Flow;
+import java.util.concurrent.Flow;
 
 /**
  * Base abstract implementation of {@link OverrideSource}, suitable for concrete
@@ -35,13 +33,13 @@ public abstract class AbstractOverrideSource<S> extends AbstractSource<OverrideS
      *
      * @param builder builder to be initialized from
      */
-    protected AbstractOverrideSource(Builder builder) {
+    protected AbstractOverrideSource(Builder<?, ?> builder) {
         super(builder);
     }
 
     @Override
     public final Flow.Publisher<Optional<OverrideData>> changes() {
-        return getChangesPublisher();
+        return changesPublisher();
     }
 
     /**
@@ -54,7 +52,7 @@ public abstract class AbstractOverrideSource<S> extends AbstractSource<OverrideS
      */
     public abstract static class Builder<B extends Builder<B, T>, T>
             extends AbstractSource.Builder<B, T, OverrideSource>
-            implements Supplier<OverrideSource> {
+            implements io.helidon.common.Builder<OverrideSource> {
 
         private volatile OverrideSource overrideSource;
 

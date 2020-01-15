@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package io.helidon.config.internal;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Flow;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -27,7 +28,6 @@ import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import io.helidon.common.reactive.Flow;
 import io.helidon.common.reactive.SubmissionPublisher;
 import io.helidon.config.ConfigHelper;
 import io.helidon.config.spi.PollingStrategy;
@@ -54,8 +54,13 @@ public class ScheduledPollingStrategy implements PollingStrategy {
      *
      * @param recurringPolicy a recurring policy
      * @param executor        an executor
+     * @return configured strategy
      */
-    public ScheduledPollingStrategy(RecurringPolicy recurringPolicy, ScheduledExecutorService executor) {
+    public static ScheduledPollingStrategy create(RecurringPolicy recurringPolicy, ScheduledExecutorService executor) {
+        return new ScheduledPollingStrategy(recurringPolicy, executor);
+    }
+
+    private ScheduledPollingStrategy(RecurringPolicy recurringPolicy, ScheduledExecutorService executor) {
         Objects.requireNonNull(recurringPolicy, "recurringPolicy cannot be null");
 
         this.recurringPolicy = recurringPolicy;
@@ -92,7 +97,7 @@ public class ScheduledPollingStrategy implements PollingStrategy {
      *
      * @return recurring policy
      */
-    public RecurringPolicy getRecurringPolicy() {
+    public RecurringPolicy recurringPolicy() {
         return recurringPolicy;
     }
 
@@ -179,11 +184,11 @@ public class ScheduledPollingStrategy implements PollingStrategy {
         }
     }
 
-    ScheduledFuture<?> getScheduledFuture() {
+    ScheduledFuture<?> scheduledFuture() {
         return scheduledFuture;
     }
 
-    ScheduledExecutorService getExecutor() {
+    ScheduledExecutorService executor() {
         return executor;
     }
 
@@ -277,7 +282,7 @@ public class ScheduledPollingStrategy implements PollingStrategy {
             delay = max.compareTo(candidate) > 0 ? candidate : max;
         }
 
-        Duration getDelay() {
+        Duration delay() {
             return delay;
         }
     }

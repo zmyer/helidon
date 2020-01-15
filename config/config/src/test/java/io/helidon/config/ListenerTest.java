@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 package io.helidon.config;
 
-import io.helidon.common.reactive.Flow;
-import org.junit.jupiter.api.Assertions;
+import java.util.concurrent.Flow;
+
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ListenerTest {
 
@@ -27,7 +29,7 @@ public class ListenerTest {
      */
     @Test
     public void compilation() {
-        Assertions.assertThrows(RuntimeException.class, () -> {
+        assertThrows(RuntimeException.class, () -> {
             Config config = null;
             config.get("my").get("app").get("security").changes().subscribe(new ConfigChangeSubscriber());
         });

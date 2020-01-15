@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,11 @@
 package io.helidon.config.internal;
 
 import java.time.Duration;
-import static org.hamcrest.MatcherAssert.assertThat;
 
-import static org.hamcrest.core.Is.is;
 import org.junit.jupiter.api.Test;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 
 /**
  * Tests {@link ScheduledPollingStrategy.AdaptiveRecurringPolicy}
@@ -39,7 +40,7 @@ public class AdaptiveRecurringPolicyTest {
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(9L));
+        assertThat(policy.delay().toMillis(), is(9L));
     }
 
     @Test
@@ -54,7 +55,7 @@ public class AdaptiveRecurringPolicyTest {
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(11L));
+        assertThat(policy.delay().toMillis(), is(11L));
     }
 
     @Test
@@ -67,11 +68,11 @@ public class AdaptiveRecurringPolicyTest {
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(5L));
+        assertThat(policy.delay().toMillis(), is(5L));
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(2L));
+        assertThat(policy.delay().toMillis(), is(2L));
     }
 
     @Test
@@ -84,11 +85,11 @@ public class AdaptiveRecurringPolicyTest {
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(20L));
+        assertThat(policy.delay().toMillis(), is(20L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(40L));
+        assertThat(policy.delay().toMillis(), is(40L));
     }
 
     @Test
@@ -101,15 +102,15 @@ public class AdaptiveRecurringPolicyTest {
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(5L));
+        assertThat(policy.delay().toMillis(), is(5L));
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(2L));
+        assertThat(policy.delay().toMillis(), is(2L));
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(2L));
+        assertThat(policy.delay().toMillis(), is(2L));
     }
 
     @Test
@@ -122,23 +123,23 @@ public class AdaptiveRecurringPolicyTest {
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(20L));
+        assertThat(policy.delay().toMillis(), is(20L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(40L));
+        assertThat(policy.delay().toMillis(), is(40L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(80L));
+        assertThat(policy.delay().toMillis(), is(80L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(100L));
+        assertThat(policy.delay().toMillis(), is(100L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(100L));
+        assertThat(policy.delay().toMillis(), is(100L));
     }
 
     @Test
@@ -152,11 +153,11 @@ public class AdaptiveRecurringPolicyTest {
         policy.shorten();
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(1L));
+        assertThat(policy.delay().toMillis(), is(1L));
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(1L));
+        assertThat(policy.delay().toMillis(), is(1L));
     }
 
     @Test
@@ -169,11 +170,11 @@ public class AdaptiveRecurringPolicyTest {
         policy.lengthen();
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(50L));
+        assertThat(policy.delay().toMillis(), is(50L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(50L));
+        assertThat(policy.delay().toMillis(), is(50L));
 
     }
 
@@ -187,27 +188,27 @@ public class AdaptiveRecurringPolicyTest {
                         .lengthen((current, changesFactor) -> current.plusMillis(1))
                         .build();
 
-        assertThat(policy.getDelay().toMillis(), is(10L));
+        assertThat(policy.delay().toMillis(), is(10L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(11L));
+        assertThat(policy.delay().toMillis(), is(11L));
 
         policy.lengthen();
 
-        assertThat(policy.getDelay().toMillis(), is(11L));
+        assertThat(policy.delay().toMillis(), is(11L));
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(10L));
+        assertThat(policy.delay().toMillis(), is(10L));
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(9L));
+        assertThat(policy.delay().toMillis(), is(9L));
 
         policy.shorten();
 
-        assertThat(policy.getDelay().toMillis(), is(9L));
+        assertThat(policy.delay().toMillis(), is(9L));
     }
 
 }

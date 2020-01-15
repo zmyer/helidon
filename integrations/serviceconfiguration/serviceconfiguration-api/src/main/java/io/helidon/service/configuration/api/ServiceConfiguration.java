@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ package io.helidon.service.configuration.api;
 
 import java.util.Objects;
 import java.util.Properties;
-import java.util.ServiceConfigurationError; // for javadoc only
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.Set;
 
@@ -37,12 +37,13 @@ import java.util.Set;
  * ServiceConfiguration} by any other means may result in undefined
  * behavior.</p>
  *
- * @author <a href="mailto:laird.nelson@oracle.com">Laird Nelson</a>
- *
  * @see #getInstance(String)
  *
  * @see ServiceConfigurationProvider
+ *
+ * @deprecated This class is slated for removal.
  */
+@Deprecated
 public abstract class ServiceConfiguration {
 
 

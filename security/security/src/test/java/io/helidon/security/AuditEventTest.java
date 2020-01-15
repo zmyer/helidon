@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package io.helidon.security;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.CoreMatchers.containsString;
@@ -35,24 +34,24 @@ public class AuditEventTest {
 
         AuditEvent.AuditParam param = AuditEvent.AuditParam.plain(name, value);
 
-        assertThat(param.getName(), is(name));
-        assertThat(param.getValue().get(), is(value));
+        assertThat(param.name(), is(name));
+        assertThat(param.value().get(), is(value));
         assertThat(param.isSensitive(), is(false));
         assertThat(param.toString(), containsString(name));
         assertThat(param.toString(), containsString(value));
 
-        Assertions.assertEquals(name, param.getName());
+        assertThat(param.name(), is(name));
     }
 
     @Test
-    public void testSensitiveParam() {
+    void testSensitiveParam() {
         String name = "paramName";
         String value = "sensitiveValue";
 
         AuditEvent.AuditParam param = AuditEvent.AuditParam.sensitive(name, value);
 
-        assertThat(param.getName(), is(name));
-        assertThat(param.getValue().get(), is(value));
+        assertThat(param.name(), is(name));
+        assertThat(param.value().get(), is(value));
         assertThat(param.isSensitive(), is(true));
         assertThat(param.toString(), containsString(name));
         assertThat(param.toString(), not(containsString(value)));

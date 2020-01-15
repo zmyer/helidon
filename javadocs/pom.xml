@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+    Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
     <parent>
         <groupId>io.helidon</groupId>
         <artifactId>helidon-project</artifactId>
-        <version>0.10.6-SNAPSHOT</version>
+        <version>2.0-SNAPSHOT</version>
     </parent>
     <artifactId>helidon-javadocs</artifactId>
     <name>Helidon Javadocs</name>
@@ -37,6 +37,13 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <executions>
+                    <!-- skip the execution added by the javadoc profile -->
+                     <execution>
+                        <id>default-jar</id>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>javadoc</id>
                         <phase>generate-sources</phase>
@@ -45,10 +52,10 @@
                         </goals>
                         <configuration>
                             <bottom>
-                            <![CDATA[Copyright &#169; 2018,
-                                <a href="http://www.oracle.com">Oracle</a>
+                            <![CDATA[Copyright &copy; {inceptionYear}&ndash;{currentYear}
+                                <a href="https://www.oracle.com/index.html">Oracle</a>
                                 and/or its affiliates.
-                                All Rights Reserved. Use is subject to license terms.]]>
+                                All rights reserved. Use is subject to license terms.]]>
                             </bottom>
                             <dependencySourceExcludes>
                                 <dependencySourceExclude>org.osgi:*</dependencySourceExclude>
@@ -57,6 +64,7 @@
                                 <dependencySourceExclude>javax.interceptor:*</dependencySourceExclude>
                                 <dependencySourceExclude>javax.enterprise.concurrent:*</dependencySourceExclude>
                                 <dependencySourceExclude>javax.el:*</dependencySourceExclude>
+                                <dependencySourceExclude>io.helidon.grpc:io.grpc</dependencySourceExclude>
                             </dependencySourceExcludes>
                             <dependencySourceIncludes>
                                 <dependencySourceInclude>io.helidon.*:*</dependencySourceInclude>
@@ -65,54 +73,91 @@
                             <destDir>classes</destDir>
                             <doclint>none</doclint>
                             <doctitle>Helidon ${project.version} API Documentation</doctitle>
-                            <excludePackageNames>*.internal:*.internal.*:*.config.testing.*</excludePackageNames>
+                            <!--
+                                io.helidon.common.metrics support compat. between MP metrics 1.1 and 2.0. The contents
+                                are not for use by developers using Helidon and will be removed if/when we stop supporting
+                                the 1.1 compatibility.
+                            -->
+                            <excludePackageNames>*.internal:*.internal.*:*.config.testing.*:io.helidon.common.metrics</excludePackageNames>
                             <groups>
                                 <group>
                                     <title>Microprofile</title>
                                     <packages>io.helidon.microprofile*</packages>
                                 </group>
                                 <group>
-                                    <title>Common APIs</title>
+                                    <title>Common</title>
                                     <packages>io.helidon.common*:io.helidon.common.reactive*</packages>
                                 </group>
                                 <group>
-                                    <title>Configuration API</title>
+                                    <title>Configuration</title>
                                     <packages>io.helidon.config*</packages>
                                 </group>
                                 <group>
-                                    <title>Security API</title>
+                                    <title>Media Support</title>
+                                    <packages>io.helidon.media*</packages>
+                                </group>
+                                <group>
+                                    <title>Security</title>
                                     <packages>io.helidon.security*</packages>
                                 </group>
                                 <group>
-                                    <title>Reactive Web Server API</title>
+                                    <title>Reactive Web Server</title>
                                     <packages>io.helidon.webserver*</packages>
                                 </group>
                                 <group>
                                     <title>Integrations</title>
                                     <packages>io.helidon.integrations*:io.helidon.service.configuration*</packages>
                                 </group>
+                                <group>
+                                    <title>gRPC</title>
+                                    <packages>io.helidon.grpc*</packages>
+                                </group>
+                                <group>
+                                    <title>Health</title>
+                                    <packages>io.helidon.health*</packages>
+                                </group>
+                                <group>
+                                    <title>Metrics</title>
+                                    <packages>io.helidon.metrics*</packages>
+                                </group>
+                                <group>
+                                    <title>Tracing</title>
+                                    <packages>io.helidon.tracing*</packages>
+                                </group>
+                                <group>
+                                    <title>Web Client</title>
+                                    <packages>io.helidon.webclient.jaxrs*</packages>
+                                </group>
+                                <group>
+                                    <title>Open API</title>
+                                    <packages>io.helidon.openapi*</packages>
+                                </group>
                             </groups>
                             <includeDependencySources>true</includeDependencySources>
                             <includeTransitiveDependencySources>true</includeTransitiveDependencySources>
-                            <links>
-                                <link>http://docs.jboss.org/cdi/api/${version.lib.cdi-api}</link>
-                                <link>http://www.reactive-streams.org/reactive-streams-${version.lib.reactivestreams}-javadoc</link>
-                                <link>https://jax-rs.github.io/apidocs/${version.lib.jaxrs-api}</link>
-                                <link>https://jersey.github.io/apidocs/${version.lib.jersey}/jersey</link>
-                                <link>https://static.javadoc.io/com.typesafe/config/${version.lib.typesafe-config}</link>
-                                <link>https://static.javadoc.io/io.netty/netty-transport/${version.lib.netty}</link>
-                                <link>https://static.javadoc.io/io.opentracing/opentracing-api/${version.lib.opentracing}</link>
-                                <link>https://static.javadoc.io/io.prometheus/simpleclient/${version.lib.prometheus}</link>
-                                <link>https://static.javadoc.io/io.zipkin.reporter2/zipkin-reporter/${version.lib.zipkin}</link>
-                                <link>https://static.javadoc.io/javax.json/javax.json-api/${version.lib.jsonp-api}</link>
-                                <link>https://static.javadoc.io/org.eclipse.microprofile.config/microprofile-config-api/${version.lib.microprofile-config-api}</link>
-                                <link>https://static.javadoc.io/org.eclipse.microprofile.health/microprofile-health-api/${version.lib.microprofile-health-api}</link>
-                                <link>https://static.javadoc.io/org.eclipse.microprofile.metrics/microprofile-metrics-api/${version.lib.microprofile-metrics-api}</link>
-                            </links>
                             <maxmemory>256m</maxmemory>
                             <reportOutputDirectory>${project.build.directory}</reportOutputDirectory>
                             <sourceFileExcludes>
-                                <sourceFileExclude>**/module-info.java</sourceFileExclude>
+                              <sourceFileExclude>**/module-info.java</sourceFileExclude>
+                              <!--
+                                  Exclude JPA static metamodel stuff
+                                  used during unit testing.  The
+                                  plugin that generates this metamodel
+                                  adds it irrevocably to the main, not
+                                  test, compilation roots.
+                              -->
+                              <sourceFileExclude>**/*_.java</sourceFileExclude>
+                              <!--
+                                  Exclude internal bridge classes for metrics which must be public for
+                                  service loader discovery.
+                              -->
+                              <sourceFileExclude>**/InternalBridgeImpl.java</sourceFileExclude>
+                              <!--
+                                  Exclude MP metrics classes that must be public for visibility but should not be
+                                  used by developers.
+                              -->
+                              <sourceFileExclude>**/MetricsCdiExtension.java</sourceFileExclude>
+                              <sourceFileExclude>**/MetricsMpService.java</sourceFileExclude>
                             </sourceFileExcludes>
                             <sourceFileIncludes>
                                 <sourceFileInclude>io/helidon/**/*.java</sourceFileInclude>
@@ -125,18 +170,6 @@
         </plugins>
     </build>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.helidon</groupId>
-                <artifactId>helidon-bom</artifactId>
-                <version>${project.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <dependencies>
         <dependency>
             <groupId>io.helidon.webserver</groupId>
@@ -144,25 +177,37 @@
         </dependency>
         <dependency>
             <groupId>io.helidon.webserver</groupId>
-            <artifactId>helidon-webserver-netty</artifactId>
+            <artifactId>helidon-webserver-access-log</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.webserver</groupId>
-            <artifactId>helidon-webserver-json</artifactId>
+            <groupId>io.helidon.media.jackson</groupId>
+            <artifactId>helidon-media-jackson-common</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.webserver</groupId>
-            <artifactId>helidon-webserver-zipkin</artifactId>
+            <groupId>io.helidon.media.jackson</groupId>
+            <artifactId>helidon-media-jackson-server</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.webserver</groupId>
-            <artifactId>helidon-webserver-prometheus</artifactId>
+            <groupId>io.helidon.media.jsonb</groupId>
+            <artifactId>helidon-media-jsonb-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.media.jsonb</groupId>
+            <artifactId>helidon-media-jsonb-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.media.jsonp</groupId>
+            <artifactId>helidon-media-jsonp-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.media.jsonp</groupId>
+            <artifactId>helidon-media-jsonp-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.metrics</groupId>
+            <artifactId>helidon-metrics-prometheus</artifactId>
         </dependency>
         <!-- config -->
-        <dependency>
-            <groupId>io.helidon.config</groupId>
-            <artifactId>helidon-config-bundle</artifactId>
-        </dependency>
         <dependency>
             <groupId>io.helidon.config</groupId>
             <artifactId>helidon-config-etcd</artifactId>
@@ -175,77 +220,81 @@
             <groupId>io.helidon.config</groupId>
             <artifactId>helidon-config-testing</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.helidon.config</groupId>
+            <artifactId>helidon-config-object-mapping</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.config</groupId>
+            <artifactId>helidon-config-encryption</artifactId>
+        </dependency>
         <!-- security -->
         <dependency>
             <groupId>io.helidon.security</groupId>
             <artifactId>helidon-security</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-tools-config</artifactId>
-        </dependency>
-        <dependency>
             <!-- Support for outbound security filtering -->
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.providers</groupId>
             <artifactId>helidon-security-providers-common</artifactId>
         </dependency>
         <dependency>
             <!-- Support for Google access token -->
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-provider-google-login</artifactId>
+            <groupId>io.helidon.security.providers</groupId>
+            <artifactId>helidon-security-providers-google-login</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-provider-jwt</artifactId>
+            <groupId>io.helidon.security.providers</groupId>
+            <artifactId>helidon-security-providers-jwt</artifactId>
         </dependency>
         <dependency>
             <!-- Basic and digest authentication -->
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-provider-http-auth</artifactId>
+            <groupId>io.helidon.security.providers</groupId>
+            <artifactId>helidon-security-providers-http-auth</artifactId>
         </dependency>
         <dependency>
             <!-- Authentication provider supporting Signatures -->
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-provider-http-signature</artifactId>
+            <groupId>io.helidon.security.providers</groupId>
+            <artifactId>helidon-security-providers-http-sign</artifactId>
         </dependency>
         <dependency>
             <!-- Jersey integration -->
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.integration</groupId>
             <artifactId>helidon-security-integration-jersey</artifactId>
         </dependency>
         <dependency>
             <!-- Web server integration -->
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.integration</groupId>
             <artifactId>helidon-security-integration-webserver</artifactId>
         </dependency>
         <dependency>
             <!-- Integration annotations -->
             <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-integration-annotations</artifactId>
+            <artifactId>helidon-security-annotations</artifactId>
         </dependency>
         <dependency>
             <!-- Attribute based access control support -->
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-provider-abac</artifactId>
+            <groupId>io.helidon.security.providers</groupId>
+            <artifactId>helidon-security-providers-abac</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.abac</groupId>
             <artifactId>helidon-security-abac-time</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.abac</groupId>
             <artifactId>helidon-security-abac-role</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.abac</groupId>
             <artifactId>helidon-security-abac-scope</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.abac</groupId>
             <artifactId>helidon-security-abac-policy</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.security</groupId>
+            <groupId>io.helidon.security.abac</groupId>
             <artifactId>helidon-security-abac-policy-el</artifactId>
         </dependency>
         <dependency>
@@ -253,71 +302,154 @@
             <groupId>io.helidon.security</groupId>
             <artifactId>helidon-security-jwt</artifactId>
         </dependency>
+        <!-- tracing -->
         <dependency>
-            <!-- A full-bundle except integrations with containers -->
-            <groupId>io.helidon.security</groupId>
-            <artifactId>helidon-security-bundle</artifactId>
+            <groupId>io.helidon.tracing</groupId>
+            <artifactId>helidon-tracing</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.tracing</groupId>
+            <artifactId>helidon-tracing-zipkin</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.tracing</groupId>
+            <artifactId>helidon-tracing-jersey-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.tracing</groupId>
+            <artifactId>helidon-tracing-jersey</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.tracing</groupId>
+            <artifactId>helidon-tracing-jaeger</artifactId>
         </dependency>
         <!-- microprofile -->
         <dependency>
             <groupId>io.helidon.microprofile.bundles</groupId>
-            <artifactId>helidon-microprofile-1.2</artifactId>
+            <artifactId>helidon-microprofile</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.microprofile</groupId>
             <artifactId>helidon-microprofile-security</artifactId>
         </dependency>
-
-        <!-- integrations javadocs -->
+        <!-- gRPC -->
+        <dependency>
+            <groupId>io.helidon.grpc</groupId>
+            <artifactId>helidon-grpc-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.grpc</groupId>
+            <artifactId>helidon-grpc-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.grpc</groupId>
+            <artifactId>helidon-grpc-metrics</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.grpc</groupId>
+            <artifactId>helidon-grpc-server</artifactId>
+        </dependency>
+        <!-- Open API -->
+        <dependency>
+            <groupId>io.helidon.openapi</groupId>
+            <artifactId>helidon-openapi</artifactId>
+        </dependency>
+        <!-- Integrations -->
         <dependency>
             <groupId>io.helidon.serviceconfiguration</groupId>
             <artifactId>helidon-serviceconfiguration-api</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.helidon.serviceconfiguration</groupId>
             <artifactId>helidon-serviceconfiguration-config-source</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.helidon.serviceconfiguration</groupId>
             <artifactId>helidon-serviceconfiguration-hikaricp-accs</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.helidon.serviceconfiguration</groupId>
             <artifactId>helidon-serviceconfiguration-hikaricp-localhost</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.helidon.serviceconfiguration</groupId>
             <artifactId>helidon-serviceconfiguration-hikaricp</artifactId>
-            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.serviceconfiguration</groupId>
+            <artifactId>helidon-serviceconfiguration-ucp-accs</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.serviceconfiguration</groupId>
+            <artifactId>helidon-serviceconfiguration-ucp-localhost</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.serviceconfiguration</groupId>
+            <artifactId>helidon-serviceconfiguration-ucp</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.serviceconfiguration</groupId>
             <artifactId>helidon-serviceconfiguration-system-kubernetes</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.helidon.serviceconfiguration</groupId>
             <artifactId>helidon-serviceconfiguration-system-oracle-accs</artifactId>
-            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-datasource</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.integrations.cdi</groupId>
             <artifactId>helidon-integrations-cdi-datasource-hikaricp</artifactId>
-            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-datasource-ucp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-delegates</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-eclipselink</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-hibernate</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.integrations.cdi</groupId>
             <artifactId>helidon-integrations-cdi-jedis</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.helidon.integrations.cdi</groupId>
             <artifactId>helidon-integrations-cdi-oci-objectstorage</artifactId>
-            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-reference-counted-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>javax.transaction</groupId>
+            <artifactId>javax.transaction-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-jpa-weld</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-jta</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.integrations.cdi</groupId>
+            <artifactId>helidon-integrations-cdi-jta-weld</artifactId>
         </dependency>
     </dependencies>
 

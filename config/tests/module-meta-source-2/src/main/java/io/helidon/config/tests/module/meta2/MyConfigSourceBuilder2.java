@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,15 +57,15 @@ public class MyConfigSourceBuilder2
      * @return new builder instance
      */
     public static MyConfigSourceBuilder2 from(Config metaConfig) {
-        return from(metaConfig.get("myProp1").asString(),
-                    metaConfig.get("myProp2").asInt())
-                .init(metaConfig);
+        return from(metaConfig.get("myProp1").asString().get(),
+                    metaConfig.get("myProp2").asInt().get())
+                .config(metaConfig);
     }
 
     @Override
-    protected MyConfigSourceBuilder2 init(Config metaConfig) {
-        metaConfig.get("myProp3").asOptionalBoolean().ifPresent(this::myProp3);
-        return super.init(metaConfig);
+    public MyConfigSourceBuilder2 config(Config metaConfig) {
+        metaConfig.get("myProp3").asBoolean().ifPresent(this::myProp3);
+        return super.config(metaConfig);
     }
 
     /**
@@ -80,7 +80,7 @@ public class MyConfigSourceBuilder2
     }
 
     @Override
-    protected MyEndpoint2 getTarget() {
+    protected MyEndpoint2 target() {
         return endpoint;
     }
 

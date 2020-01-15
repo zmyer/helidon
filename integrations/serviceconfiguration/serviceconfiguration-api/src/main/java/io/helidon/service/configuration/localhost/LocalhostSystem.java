@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,18 @@
  */
 package io.helidon.service.configuration.localhost;
 
-import io.helidon.service.configuration.api.System;
-
 /**
- * A {@linkplain System#isAuthoritative() non-authoritative} {@link
- * System} implementation describing the current local host.
+ * A {@linkplain
+ * io.helidon.service.configuration.api.System#isAuthoritative()
+ * non-authoritative} {@link System} implementation describing the
+ * current local host.
  *
- * @author <a href="mailto:laird.nelson@oracle.com">Laird Nelson</a>
+ * @see io.helidon.service.configuration.api.System
  *
- * @see System
+ * @deprecated This class is slated for removal.
  */
-public final class LocalhostSystem extends System {
+@Deprecated
+public final class LocalhostSystem extends io.helidon.service.configuration.api.System {
 
 
   /*
@@ -42,7 +43,7 @@ public final class LocalhostSystem extends System {
    *
    * @see #isAuthoritative()
    *
-   * @see System
+   * @see io.helidon.service.configuration.api.System
    */
   public LocalhostSystem() {
     super("localhost", false);
@@ -59,7 +60,7 @@ public final class LocalhostSystem extends System {
    *
    * @return {@code true} when invoked
    *
-   * @see System#isEnabled()
+   * @see io.helidon.service.configuration.api.System#isEnabled()
    */
   @Override
   public boolean isEnabled() {

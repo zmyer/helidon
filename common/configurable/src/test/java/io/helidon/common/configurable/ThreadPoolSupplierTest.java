@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,20 @@
 
 package io.helidon.common.configurable;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import io.helidon.config.Config;
+import io.helidon.config.ConfigSources;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -29,6 +38,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 
 /**
  * Unit test for {@link ThreadPoolSupplier}.
@@ -40,19 +50,19 @@ class ThreadPoolSupplierTest {
 
     @BeforeAll
     static void initClass() {
-        defaultInstance = ThreadPoolSupplier.create().get();
+        defaultInstance = ThreadPoolSupplier.create().getThreadPool();
 
         builtInstance = ThreadPoolSupplier.builder()
-                .threadNamePrefix("thread-pool-unit-test-")
-                .corePoolSize(2)
-                .daemon(true)
-                .prestart(true)
-                .queueCapacity(10)
-                .build()
-                .get();
+                                          .threadNamePrefix("thread-pool-unit-test-")
+                                          .corePoolSize(2)
+                                          .daemon(true)
+                                          .prestart(true)
+                                          .queueCapacity(10)
+                                          .build()
+                                          .getThreadPool();
 
         configuredInstance = ThreadPoolSupplier.create(Config.create().get("unit.thread-pool"))
-                .get();
+                                               .getThreadPool();
     }
 
     @Test
@@ -85,6 +95,51 @@ class ThreadPoolSupplierTest {
                      true);
     }
 
+    @Test
+    void testExperimentalConfig() {
+        String thresholdKey = "growth-threshold";
+        String rateKey = "growth-rate";
+        String threshold = "1025";
+        String rate = "77";
+        Logger log = Logger.getLogger(ThreadPoolSupplier.class.getName());
+        List<LogRecord> logRecords = new ArrayList<>();
+        Handler handler = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                logRecords.add(record);
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() throws SecurityException {
+            }
+        };
+
+        try {
+            log.addHandler(handler);
+            Config config = Config.create(ConfigSources.create(Map.of(thresholdKey, threshold, rateKey, rate)));
+            ExecutorService executor = ThreadPoolSupplier.create(config).get();
+            Optional<ThreadPool> asThreadPool = ThreadPool.asThreadPool(executor);
+            ThreadPool pool = asThreadPool.orElseThrow(() -> new RuntimeException("not a thread pool"));
+            assertThat(pool.getGrowthThreshold(), is(Integer.parseInt(threshold)));
+            assertThat(pool.getGrowthRate(), is(Integer.parseInt(rate)));
+            assertThat(logRecords.size(), is(2));
+            if (logRecords.get(0).getMessage().contains(thresholdKey)) {
+                assertThat(logRecords.get(0).getMessage(), containsString("growth-threshold\" is EXPERIMENTAL"));
+                assertThat(logRecords.get(1).getMessage(), containsString("growth-rate\" is EXPERIMENTAL"));
+            } else {
+                assertThat(logRecords.get(1).getMessage(), containsString("growth-threshold\" is EXPERIMENTAL"));
+                assertThat(logRecords.get(0).getMessage(), containsString("growth-rate\" is EXPERIMENTAL"));
+            }
+            pool.shutdown();
+        } finally {
+            log.removeHandler(handler);
+        }
+    }
+
     private void testInstance(ThreadPoolExecutor theInstance,
                               String namePrefix,
                               int corePoolSize,
@@ -102,15 +157,15 @@ class ThreadPoolSupplierTest {
 
         AtomicReference<String> threadName = new AtomicReference<>();
         theInstance
-                .submit(() -> threadName.set(Thread.currentThread().getName()))
-                .get();
+            .submit(() -> threadName.set(Thread.currentThread().getName()))
+            .get();
 
         assertThat(threadName.get(), startsWith(namePrefix));
 
         AtomicReference<Boolean> isDaemon = new AtomicReference<>();
         theInstance
-                .submit(() -> isDaemon.set(Thread.currentThread().isDaemon()))
-                .get();
+            .submit(() -> isDaemon.set(Thread.currentThread().isDaemon()))
+            .get();
 
         assertThat(isDaemon.get(), is(shouldBeDaemon));
     }

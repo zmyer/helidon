@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,27 +16,32 @@
 
 package io.helidon.config;
 
-import java.net.MalformedURLException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 
-import io.helidon.common.CollectionsHelper;
 import io.helidon.config.spi.ConfigContext;
 import io.helidon.config.spi.ConfigNode.ListNode;
 import io.helidon.config.spi.ConfigNode.ObjectNode;
 import io.helidon.config.spi.ConfigSource;
+import io.helidon.config.test.infra.RestoreSystemPropertiesExt;
 
-import static io.helidon.config.ConfigSources.from;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import static io.helidon.config.ConfigSources.DEFAULT_MAP_NAME;
+import static io.helidon.config.ConfigSources.DEFAULT_PROPERTIES_NAME;
 import static io.helidon.config.ConfigSources.prefixed;
 import static io.helidon.config.ValueNodeMatcher.valueNode;
-import io.helidon.config.test.infra.RestoreSystemPropertiesExt;
+import static java.util.Collections.emptyMap;
 import static org.hamcrest.MatcherAssert.assertThat;
-
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.sameInstance;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -65,17 +70,17 @@ public class ConfigSourcesTest {
     }
 
     @Test
-    public void testFromConfig() throws MalformedURLException, InterruptedException {
-        Map<String, String> source = CollectionsHelper.mapOf("object.leaf", "value");
+    public void testFromConfig() {
+        Map<String, String> source = Map.of("object.leaf", "value");
 
-        ConfigSource originConfigSource = from(source).build();
-        Config originConfig = Config.withSources(originConfigSource)
+        ConfigSource originConfigSource = ConfigSources.create(source).build();
+        Config originConfig = Config.builder(originConfigSource)
                 .disableEnvironmentVariablesSource()
                 .disableSystemPropertiesSource()
                 .build();
 
-        ConfigSource configSource = from(originConfig);
-        Config copy = Config.withSources(configSource)
+        ConfigSource configSource = ConfigSources.create(originConfig);
+        Config copy = Config.builder(configSource)
                 .disableEnvironmentVariablesSource()
                 .disableSystemPropertiesSource()
                 .build();
@@ -85,30 +90,22 @@ public class ConfigSourcesTest {
 
     @Test
     public void testPrefix() {
-        assertThat(Config.from(prefixed("security", from(CollectionsHelper.mapOf("credentials.username", "libor"))))
+        assertThat(Config.create(prefixed("security", ConfigSources.create(Map.of("credentials.username", "libor"))))
                            .get("security.credentials.username")
                            .asString(),
-                   is("libor"));
+                   is(ConfigValues.simpleValue("libor")));
 
     }
 
     @Test
     public void testPrefixDescription() {
-        ConfigSource source = from(CollectionsHelper.mapOf("credentials.username", "libor")).build();
+        ConfigSource source = ConfigSources.create(Map.of("credentials.username", "libor")).build();
         assertThat(prefixed("security", source).description(), is("prefixed[security]:" + source.description()));
     }
 
     @Test
-    public void testMapBuilderSupplierGetOnce() {
-        ConfigSources.MapBuilder builder = from(CollectionsHelper.mapOf());
-
-        ConfigSource configSource = builder.get();
-        assertThat(configSource, sameInstance(builder.get()));
-    }
-
-    @Test
     public void testCompositeBuilderSupplierGetOnce() {
-        ConfigSources.CompositeBuilder builder = ConfigSources.from();
+        ConfigSources.CompositeBuilder builder = ConfigSources.create();
 
         ConfigSource configSource = builder.get();
         assertThat(configSource, sameInstance(builder.get()));
@@ -116,7 +113,7 @@ public class ConfigSourcesTest {
 
     @Test
     public void testLoadNoSource() {
-        ConfigSource source = ConfigSources.load().build();
+        ConfigSource source = ConfigSources.empty();
         source.init(mock(ConfigContext.class));
 
         assertThat(source.load(), is(Optional.empty()));
@@ -126,7 +123,7 @@ public class ConfigSourcesTest {
     public void testLoadSingleSource() {
         System.setProperty(TEST_SYS_PROP_NAME, TEST_SYS_PROP_VALUE);
 
-        ConfigSource meta1 = ConfigSources.from(
+        ConfigSource meta1 = ConfigSources.create(
                 ObjectNode.builder()
                         .addList("sources", ListNode.builder()
                                 .addObject(ObjectNode.builder()
@@ -135,7 +132,10 @@ public class ConfigSourcesTest {
                                 .build())
                         .build());
 
-        ConfigSource source = ConfigSources.load(meta1).build();
+        List<ConfigSource> sources = MetaConfig.configSources(Config.create(meta1));
+        assertThat(sources, hasSize(1));
+
+        ConfigSource source = sources.get(0);
         source.init(mock(ConfigContext.class));
         ObjectNode objectNode = source.load().get();
         assertThat(objectNode.get(TEST_SYS_PROP_NAME), valueNode(TEST_SYS_PROP_VALUE));
@@ -146,7 +146,7 @@ public class ConfigSourcesTest {
         System.setProperty(TEST_SYS_PROP_NAME, TEST_SYS_PROP_VALUE);
 
         //meta1's `sources` property is used
-        ConfigSource meta1 = ConfigSources.from(
+        ConfigSource meta1 = ConfigSources.create(
                 ObjectNode.builder()
                         .addList("sources", ListNode.builder()
                                 .addObject(ObjectNode.builder()
@@ -159,7 +159,7 @@ public class ConfigSourcesTest {
                         .build());
 
         //meta2's `sources` property is ignored
-        ConfigSource meta2 = ConfigSources.from(
+        ConfigSource meta2 = ConfigSources.create(
                 ObjectNode.builder()
                         .addList("sources", ListNode.builder()
                                 .addObject(ObjectNode.builder()
@@ -169,7 +169,10 @@ public class ConfigSourcesTest {
                         .build());
 
         //meta1 has precedence over meta2
-        ConfigSource source = ConfigSources.load(meta1, meta2).build();
+        List<ConfigSource> sources = MetaConfig.configSources(Config.create(meta1));
+        assertThat(sources, hasSize(1));
+        ConfigSource source = sources.get(0);
+
         ConfigContext context = mock(ConfigContext.class);
         when(context.findParser("text/x-java-properties")).thenReturn(Optional.of(ConfigParsers.properties()));
 
@@ -180,4 +183,154 @@ public class ConfigSourcesTest {
         assertThat(objectNode.get("key1"), valueNode("val1"));
     }
 
+    @Test
+    public void testSystemPropertiesSourceType() {
+        ConfigSource source = ConfigSources.systemProperties();
+        assertThat(source, is(instanceOf(ConfigSources.SystemPropertiesConfigSource.class)));
+        assertThat(source.description(), is("SystemPropertiesConfig[]*"));
+    }
+
+    @Test
+    public void testEnvironmentVariablesSourceType() {
+        ConfigSource source = ConfigSources.environmentVariables();
+        assertThat(source, is(instanceOf(ConfigSources.EnvironmentVariablesConfigSource.class)));
+        assertThat(source.description(), is("EnvironmentVariablesConfig[]"));
+    }
+
+    @Test
+    public void testDefaultMapSourceName() {
+        assertThat(ConfigSources.create(emptyMap()).get().description(), containsString(DEFAULT_MAP_NAME));
+    }
+
+    @Test
+    public void testDefaultPropertiesSourceName() {
+        assertThat(ConfigSources.create(new Properties()).get().description(), containsString(DEFAULT_PROPERTIES_NAME));
+    }
+
+    @Test
+    public void testEnvironmentVariableAliases() {
+        Config config = Config.builder()
+                              .disableSystemPropertiesSource()
+                              .build();
+
+        assertValue("simple", "unmapped-env-value", config);
+
+        assertValue("_underscore", "mapped-env-value", config);
+        assertValue("/underscore", "mapped-env-value", config);
+
+        assertValue("FOO_BAR", "mapped-env-value", config);
+        assertValue("foo.bar", "mapped-env-value", config);
+        assertValue("foo/bar", "mapped-env-value", config);
+        assertValue("foo#bar", "mapped-env-value", config);
+
+        assertValue("com_ACME_size", "mapped-env-value", config);
+        assertValue("com.ACME.size", "mapped-env-value", config);
+        assertValue("com!ACME@size", "mapped-env-value", config);
+        assertValue("com#ACME$size", "mapped-env-value", config);
+        assertValue("com/ACME/size", "mapped-env-value", config);
+
+        assertValue("SERVER_EXECUTOR_dash_SERVICE_MAX_dash_POOL_dash_SIZE", "mapped-env-value", config);
+        assertValue("SERVER.EXECUTOR-SERVICE.MAX-POOL-SIZE", "mapped-env-value", config);
+        assertValue("server.executor-service.max-pool-size", "mapped-env-value", config);
+        assertValue("SERVER_EXECUTOR_dash_SERVICE_MAX_dash_POOL_dash_SIZE", "mapped-env-value", config);
+    }
+
+    @Test
+    public void testPrecedence() {
+
+        // NOTE: This code should be kept in sync with MpcSourceEnvironmentVariablesTest.testPrecedence(), as we want
+        //       SE and MP to be as symmetrical as possible. There are two differences:
+        //
+        //       1. This is now resolved - SE and MP have the same behavior related
+        //          to System proprerties and Environment variables
+        //
+        //       2. An upper-to-lower case mapping is performed in SE but is not in MP (correctly, per spec). This is a
+        //          consequence of the static mapping (see EnvironmentVariables.expand()) required in SE to preserve
+        //          precedence of aliased env vars during the merge step (see MergingStrategy.merge()). Fixing this
+        //          is much harder but probably not very important.
+        //
+        //       The assertions below that differ are marked with a "DIFFERENCE" N comment.
+
+        System.setProperty("com.ACME.size", "sys-prop-value");
+        Map<String, String> appValues = Map.of("app.key", "app-value",
+                                              "com.ACME.size", "app-value",
+                                              "server.executor-service.max-pool-size", "app-value");
+
+        ConfigSource appSource = ConfigSources.create(appValues).build();
+
+        // Application source only.
+        // Key mapping should NOT occur.
+
+        Config appOnly = Config.builder(appSource)
+                               .disableEnvironmentVariablesSource()
+                               .disableSystemPropertiesSource()
+                               .build();
+
+        assertValue("app.key", "app-value", appOnly);
+        assertValue("com.ACME.size", "app-value", appOnly);
+        assertValue("server.executor-service.max-pool-size", "app-value", appOnly);
+
+        assertNoValue("com.acme.size", appOnly);
+        assertNoValue("com/ACME/size", appOnly);
+        assertNoValue("server/executor-service/max-pool-size", appOnly);
+
+
+        // Application and system property sources.
+        // System properties should take precedence over application values.
+        // Key mapping should NOT occur.
+
+        Config appAndSys = Config.builder(appSource)
+                              .disableEnvironmentVariablesSource()
+                              .build();
+
+        assertValue("app.key", "app-value", appAndSys);
+        assertValue("com.ACME.size", "sys-prop-value", appAndSys);
+        assertValue("server.executor-service.max-pool-size", "app-value", appAndSys);
+
+        assertNoValue("com.acme.size", appOnly);
+        assertNoValue("com/ACME/size", appAndSys);
+        assertNoValue("server/executor-service/max-pool-size", appAndSys);
+
+
+        // Application and environment variable sources.
+        // Environment variables should take precedence over application values.
+        // Key mapping SHOULD occur.
+
+        Config appAndEnv = Config.builder(appSource)
+                                 .disableSystemPropertiesSource()
+                                 .build();
+
+        assertValue("app.key", "app-value", appAndEnv);
+        assertValue("com.ACME.size", "mapped-env-value", appAndEnv);
+        assertValue("server.executor-service.max-pool-size", "mapped-env-value", appAndEnv);
+
+        assertValue("com.acme.size","mapped-env-value", appAndEnv);  // DIFFERENCE 2: should not exist
+        assertValue("com/ACME/size", "mapped-env-value", appAndEnv);
+        assertValue("server/executor-service/max-pool-size", "mapped-env-value", appAndEnv);
+
+
+        // Application, system property and environment variable sources.
+        // System properties should take precedence over environment variables.
+        // Environment variables should take precedence over application values.
+        // Key mapping SHOULD occur.
+
+        Config appSysAndEnv = Config.builder(appSource)
+                                    .build();
+
+        assertValue("app.key", "app-value", appSysAndEnv);
+        assertValue("com.ACME.size", "sys-prop-value", appSysAndEnv);
+        assertValue("server.executor-service.max-pool-size", "mapped-env-value", appSysAndEnv);
+
+        assertValue("com.acme.size","mapped-env-value", appAndEnv);  // DIFFERENCE 2: should not exist
+        assertValue("com/ACME/size", "mapped-env-value", appSysAndEnv);
+        assertValue("server/executor-service/max-pool-size", "mapped-env-value", appSysAndEnv);
+    }
+
+    static void assertValue(final String key, final String expectedValue, final Config config) {
+        assertThat(config.get(key).asString().get(), is(expectedValue));
+    }
+
+    static void assertNoValue(final String key, final Config config) {
+        assertThat(config.get(key).exists(), is(false));
+    }
 }

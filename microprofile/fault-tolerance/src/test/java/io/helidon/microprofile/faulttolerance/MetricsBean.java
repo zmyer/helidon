@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,9 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 import org.eclipse.microprofile.metrics.Counter;
 import org.eclipse.microprofile.metrics.annotation.Metric;
 
+import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.BULKHEAD_CONCURRENT_EXECUTIONS;
+import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.BULKHEAD_WAITING_QUEUE_POPULATION;
+import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.getGauge;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
@@ -142,6 +145,18 @@ public class MetricsBean {
         }
     }
 
+    static class TestException extends Exception {
+    }
+
+    @CircuitBreaker(requestVolumeThreshold = 2,
+            failureRatio = 1.0D,
+            delay = 1000,
+            successThreshold = 2,
+            failOn = {TestException.class})
+    public void exerciseBreakerException(boolean runtime) throws Exception {
+        throw runtime ? new RuntimeException("oops") : new TestException();
+    }
+
     @Fallback(fallbackMethod = "onFailure")
     public String fallback() {
         FaultToleranceTest.printStatus("MetricsBean::fallback()", "failure");
@@ -153,18 +168,19 @@ public class MetricsBean {
         return "fallback";
     }
 
+    @Asynchronous
     @Bulkhead(value = 3, waitingTaskQueue = 3)
-    public String concurrent(long sleepMillis) {
+    public Future<String> concurrent(long sleepMillis) {
         FaultToleranceTest.printStatus("MetricsBean::concurrent()", "success");
         try {
-            assertThat(FaultToleranceMetrics.getGauge(this, "concurrent",
-                                                                    FaultToleranceMetrics.BULKHEAD_CONCURRENT_EXECUTIONS, long.class).getValue(),
-                                     is(not(0)));
+            assertThat(getGauge(this,
+                    "concurrent",
+                    BULKHEAD_CONCURRENT_EXECUTIONS, long.class).getValue(), is(not(0)));
             Thread.sleep(sleepMillis);
         } catch (Exception e) {
             // falls through
         }
-        return "success";
+        return CompletableFuture.completedFuture("success");
     }
 
     @Asynchronous
@@ -172,8 +188,8 @@ public class MetricsBean {
     public Future<String> concurrentAsync(long sleepMillis) {
         FaultToleranceTest.printStatus("MetricsBean::concurrentAsync()", "success");
         try {
-            assertThat((long) FaultToleranceMetrics.getGauge(this, "concurrentAsync",
-                                                             FaultToleranceMetrics.BULKHEAD_WAITING_QUEUE_POPULATION, long.class).getValue(),
+            assertThat((long) getGauge(this, "concurrentAsync",
+                                                             BULKHEAD_WAITING_QUEUE_POPULATION, long.class).getValue(),
                        is(greaterThanOrEqualTo(0L)));
             Thread.sleep(sleepMillis);
         } catch (Exception e) {

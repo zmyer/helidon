@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,13 @@ import java.util.Set;
 /**
  * An abstract factory of {@link ServiceConfiguration} instances.
  *
- * @author <a href="mailto:laird.nelson@oracle.com">Laird Nelson</a>
- *
  * @see #buildFor(Set, Properties)
  *
  * @see ServiceConfiguration
+ *
+ * @deprecated This class is slated for removal.
  */
+@Deprecated
 public abstract class ServiceConfigurationProvider {
 
 

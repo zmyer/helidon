@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Flow;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import io.helidon.common.reactive.Flow;
 import io.helidon.common.reactive.SubmissionPublisher;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigException;
 import io.helidon.config.ConfigHelper;
+import io.helidon.config.MetaConfig;
 import io.helidon.config.PollingStrategies;
 import io.helidon.config.RetryPolicies;
 import io.helidon.config.internal.ConfigThreadFactory;
@@ -59,10 +60,10 @@ public abstract class AbstractSource<T, S> implements Source<T> {
 
     AbstractSource(Builder<?, ?, ?> builder) {
         mandatory = builder.isMandatory();
-        pollingStrategy = builder.getPollingStrategy();
-        changesExecutor = builder.getChangesExecutor();
-        retryPolicy = builder.getRetryPolicy();
-        changesSubmitter = new SubmissionPublisher<>(changesExecutor, builder.getChangesMaxBuffer());
+        pollingStrategy = builder.pollingStrategy();
+        changesExecutor = builder.changesExecutor();
+        retryPolicy = builder.retryPolicy();
+        changesSubmitter = new SubmissionPublisher<>(changesExecutor, builder.changesMaxBuffer());
         changesPublisher = ConfigHelper.suspendablePublisher(changesSubmitter,
                                                              this::subscribePollingStrategy,
                                                              this::cancelPollingStrategy);
@@ -98,7 +99,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         }
     }
 
-    SubmissionPublisher<Optional<T>> getChangesSubmitter() {
+    SubmissionPublisher<Optional<T>> changesSubmitter() {
         return changesSubmitter;
     }
 
@@ -121,11 +122,11 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         pollingEventSubscriber = null;
     }
 
-    Flow.Publisher<Optional<T>> getChangesPublisher() {
+    Flow.Publisher<Optional<T>> changesPublisher() {
         return changesPublisher;
     }
 
-    PollingStrategy getPollingStrategy() {
+    PollingStrategy pollingStrategy() {
         return pollingStrategy;
     }
 
@@ -163,7 +164,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
      */
     protected abstract Optional<S> dataStamp();
 
-    Optional<Data<T, S>> getLastData() {
+    Optional<Data<T, S>> lastData() {
         return lastData;
     }
 
@@ -252,7 +253,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
                 } else {
                     LOGGER.log(Level.CONFIG, message + " " + cause.getLocalizedMessage());
                 }
-                LOGGER.log(Level.FINE,
+                LOGGER.log(Level.FINEST,
                            String.format("Load of '%s' source failed with an exception.",
                                          description()),
                            cause);
@@ -294,7 +295,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
      */
     String formatDescription(String uid) {
         return Source.super.description() + "[" + uid + "]" + (isMandatory() ? "" : "?")
-                + (getPollingStrategy().equals(PollingStrategies.nop()) ? "" : "*");
+                + (pollingStrategy().equals(PollingStrategies.nop()) ? "" : "*");
     }
 
     /**
@@ -315,7 +316,9 @@ public abstract class AbstractSource<T, S> implements Source<T> {
      * polling strategy from
      * @param <S> type of source that should be built
      */
-    public abstract static class Builder<B extends Builder<B, T, S>, T, S> {
+    public abstract static class Builder<B extends Builder<B, T, S>, T, S extends Source<?>>
+            implements io.helidon.common.Builder<S> {
+
         /**
          * Default executor where the changes threads are run.
          */
@@ -349,30 +352,45 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         }
 
         /**
-         * Initialize builder from specified configuration properties.
+         * Returns current builder instance.
+         *
+         * @return builder instance
+         */
+        protected B thisBuilder() {
+            return thisBuilder;
+        }
+
+        /**
+         * Configure this builder from an existing configuration (we use the term meta configuration for this
+         * type of configuration, as it is a configuration that builds configuration).
          * <p>
          * Supported configuration {@code properties}:
          * <ul>
-         * <li>{@code optional} - type {@code boolean}, see {@link #optional()}</li>
-         * <li>{@code polling-strategy} - see {@link PollingStrategy} for details about configuration format,
-         * see {@link #pollingStrategy(Supplier)} or {@link #pollingStrategy(Function)}</li>
+         *  <li>{@code optional} - type {@code boolean}, see {@link #optional()}</li>
+         *  <li>{@code polling-strategy} - see {@link PollingStrategy} for details about configuration format,
+         *          see {@link #pollingStrategy(Supplier)} or {@link #pollingStrategy(Function)}</li>
+         *  <li>{@code retry-policy} - see {@link io.helidon.config.spi.RetryPolicy} for details about
+         *      configuration format</li>
          * </ul>
          *
-         * @param metaConfig configuration properties used to initialize a builder instance.
+         *
+         * @param metaConfig configuration to configure this source
          * @return modified builder instance
          */
-        protected B init(Config metaConfig) {
+        @SuppressWarnings("unchecked")
+        public B config(Config metaConfig) {
             //optional / mandatory
-            metaConfig.get(OPTIONAL_KEY).asOptionalBoolean()
-                    .filter(value -> value) //filter `true` only
-                    .ifPresent(value -> optional());
+            metaConfig.get(OPTIONAL_KEY)
+                    .asBoolean()
+                    .ifPresent(this::optional);
+
             //polling-strategy
             metaConfig.get(POLLING_STRATEGY_KEY)
-                    .ifExists(cfg -> pollingStrategy(PollingStrategyConfigMapper.instance().apply(cfg, targetType)));
+                    .ifExists(cfg -> pollingStrategy((t -> MetaConfig.pollingStrategy(cfg).apply(t))));
+
             //retry-policy
             metaConfig.get(RETRY_POLICY_KEY)
-                    .asOptional(RetryPolicy.class)
-                    .ifPresent(this::retryPolicy);
+                    .ifExists(cfg -> retryPolicy(MetaConfig.retryPolicy(cfg)));
 
             return thisBuilder;
         }
@@ -394,7 +412,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         /**
          * Sets the polling strategy that accepts key source attributes.
          * <p>
-         * Concrete subclasses should override {@link #getTarget()} to provide
+         * Concrete subclasses should override {@link #target()} to provide
          * the key source attributes (target). For example, the {@code Builder}
          * for a {@code FileConfigSource} or {@code ClasspathConfigSource} uses
          * the {@code Path} to the corresponding file or resource as the key
@@ -406,10 +424,10 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          * @throws UnsupportedOperationException if the concrete {@code Builder}
          * implementation does not support the polling strategy
          * @see #pollingStrategy(Supplier)
-         * @see #getTarget()
+         * @see #target()
          */
         public final B pollingStrategy(Function<T, Supplier<PollingStrategy>> pollingStrategyProvider) {
-            pollingStrategy(() -> pollingStrategyProvider.apply(getTarget()).get());
+            pollingStrategy(() -> pollingStrategyProvider.apply(target()).get());
 
             return thisBuilder;
         }
@@ -419,8 +437,17 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return key source attributes (target).
          */
-        protected T getTarget() {
+        protected T target() {
             return null;
+        }
+
+        /**
+         * Type of target used by this builder.
+         *
+         * @return target type, used by {@link #pollingStrategy(java.util.function.Function)}
+         */
+        public Class<T> targetType() {
+            return targetType;
         }
 
         /**
@@ -430,6 +457,18 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          */
         public B optional() {
             this.mandatory = false;
+
+            return thisBuilder;
+        }
+
+        /**
+         * Built {@link ConfigSource} will be optional ({@code true}) or mandatory ({@code false}).
+         *
+         * @param optional set to {@code true} to mark this source optional.
+         * @return a modified builder instance
+         */
+        public B optional(boolean optional) {
+            this.mandatory = !optional;
 
             return thisBuilder;
         }
@@ -461,7 +500,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          * Specifies maximum capacity for each subscriber's buffer to be used to deliver
          * {@link ConfigSource#changes() config source changes}.
          * <p>
-         * By default {@link Flow#DEFAULT_BUFFER_SIZE} is used.
+         * By default {@link Flow#defaultBufferSize()} is used.
          * <p>
          * Note: Not consumed events will be dropped off.
          *
@@ -491,6 +530,20 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         }
 
         /**
+         * Set a {@link RetryPolicy} that will be responsible for invocation of {@link AbstractSource#load()}.
+         * <p>
+         * The default reply policy is {@link RetryPolicies#justCall()}.
+         * <p>
+         * Create a custom policy or use the built-in policy constructed with a {@link RetryPolicies#repeat(int) builder}.
+         *
+         * @param retryPolicy retry policy
+         * @return a modified builder instance
+         */
+        public B retryPolicy(RetryPolicy retryPolicy) {
+            return retryPolicy(() -> retryPolicy);
+        }
+
+        /**
          * Builds new instance of {@code S}.
          *
          * @return new instance of {@code S}.
@@ -511,7 +564,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return polling-strategy property.
          */
-        protected PollingStrategy getPollingStrategy() {
+        protected PollingStrategy pollingStrategy() {
             PollingStrategy pollingStrategy = pollingStrategySupplier.get();
 
             Objects.requireNonNull(pollingStrategy, "pollingStrategy cannot be null");
@@ -524,7 +577,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return changes-executor property.
          */
-        protected Executor getChangesExecutor() {
+        protected Executor changesExecutor() {
             return changesExecutor;
         }
 
@@ -533,11 +586,15 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return changes-max-buffer property.
          */
-        protected int getChangesMaxBuffer() {
+        protected int changesMaxBuffer() {
             return changesMaxBuffer;
         }
 
-        protected RetryPolicy getRetryPolicy() {
+        /**
+         * Retry policy configured in this builder.
+         * @return retry policy
+         */
+        protected RetryPolicy retryPolicy() {
             return retryPolicySupplier.get();
         }
     }

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@ engine:
       plantumlconfig: "_plantuml-config.txt"
       javadoc-base-url: "./apidocs/index.html"
       helidon-version: "${project.version}"
+      microprofile-openapi-version: "${version.lib.microprofile-openapi-api}"
+      jandex-plugin-version: ${version.plugin.jandex}
+      mp-version: "3.2"
       guides-dir: "${project.basedir}/../examples/guides"
 assets:
   - target: "/"
@@ -38,11 +41,13 @@ header:
   stylesheets:
     - path: "css/styles.css"
 pages:
-  - includes:
-      - "**/*.adoc"
+    - includes:
+        - "**/*.adoc"
+      excludes:
+        - "grpc/09_marshalling.adoc"
 backend:
     name: "vuetify"
-    homePage: "about/01_introduction.adoc"
+    homePage: "about/01_overview.adoc"
     releases:
         - "${project.version}"
     navigation:
@@ -57,50 +62,90 @@ backend:
               pathprefix: "/about"
               glyph:
                 type: "icon"
-                value: "weekend"
-              items:
-                - includes:
-                    - "about/*.adoc"
-            - title: "Getting Started"
-              pathprefix: "/getting-started"
-              glyph:
-                type: "icon"
                 value: "assistant"
               items:
                 - includes:
-                    - "getting-started/*.adoc"
+                    - "about/*.adoc"
             - title: "Reactive webserver"
               pathprefix: "/webserver"
               glyph:
                 type: "icon"
                 value: "settings_ethernet"
               items:
-                -  includes:
-                     - "webserver/*.adoc"
+                - includes:
+                    - "webserver/*.adoc"
+            - title: "gRPC server"
+              pathprefix: "/grpc"
+              glyph:
+                type: "icon"
+                value: "swap_horiz"
+              items:
+                - includes:
+                    - "grpc/*.adoc"
             - title: "Config"
               pathprefix: "/config"
               glyph:
                 type: "icon"
                 value: "settings"
               items:
-                -  includes:
-                     - "config/*.adoc"
+                - includes:
+                    - "config/*.adoc"
             - title: "Security"
               pathprefix: "/security"
               glyph:
                 type: "icon"
                 value: "security"
               items:
-                -  includes:
-                     - "security/*.adoc"
-            - title: "Microprofile"
+                - includes:
+                    - "security/*.adoc"
+            - title: "MicroProfile"
               pathprefix: "/microprofile"
               glyph:
                 type: "icon"
                 value: "widgets"
               items:
-                -  includes:
-                     - "microprofile/*.adoc"
+                - includes:
+                    - "microprofile/*.adoc"
+            - title: "Extensions"
+              pathprefix: "/extensions"
+              glyph:
+                type: "icon"
+                value: "extension"
+              items:
+                - includes:
+                    - "extensions/*.adoc"
+            - title: "Metrics"
+              pathprefix: "/metrics"
+              glyph:
+                type: "icon"
+                value: "av_timer"
+              items:
+                - includes:
+                    - "metrics/*.adoc"
+            - title: "Tracing"
+              pathprefix: "/tracing"
+              glyph:
+                type: "icon"
+                value: "timeline"
+              items:
+                - includes:
+                    - "tracing/*.adoc"
+            - title: "Health Checks"
+              pathprefix: "/health"
+              glyph:
+                type: "icon"
+                value: "favorite_outline"
+              items:
+                - includes:
+                    - "health/*.adoc"
+            - title: "OpenAPI"
+              pathprefix: "/openapi"
+              glyph:
+                type: "icon"
+                value: "donut_large"
+              items:
+                - includes:
+                    - "openapi/*.adoc"
             - title: "Guides"
               pathprefix: "/guides"
               glyph:
@@ -119,5 +164,5 @@ backend:
             - title: "Community"
               glyph:
                 type: "icon"
-                value: "fa-slack"
-              href: "https://join.slack.com/t/helidon/shared_invite/enQtNDM1NjU3MjkyNDg2LTFkZTM4NmI3OWUyNjUxYWQ5Njc0NGNiMzY3MTZiZmMwNzAxYmI4YzUzOWNkNzNlZTEwNDRkZGU4YzMzZjhkNTE"
+                value: "fa-github"
+              href: "#/community/01_community"

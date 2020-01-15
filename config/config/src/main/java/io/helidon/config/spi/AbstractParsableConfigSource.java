@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package io.helidon.config.spi;
 
 import java.util.Optional;
 
-import io.helidon.common.OptionalHelper;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigException;
 import io.helidon.config.spi.ConfigNode.ObjectNode;
@@ -49,15 +48,15 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
     protected AbstractParsableConfigSource(AbstractParsableConfigSource.Builder builder) {
         super(builder);
 
-        mediaType = builder.getMediaType();
-        parser = builder.getParser();
+        mediaType = builder.mediaType();
+        parser = builder.parser();
     }
 
     @Override
     protected Data<ObjectNode, S> loadData() {
         ConfigParser.Content<S> content = content();
-        ObjectNode objectNode = parse(getConfigContext(), content);
-        return new Data<>(Optional.of(objectNode), content.getStamp());
+        ObjectNode objectNode = parse(configContext(), content);
+        return new Data<>(Optional.of(objectNode), content.stamp());
     }
 
     /**
@@ -65,7 +64,7 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
      *
      * @return source associated media type or {@code null} if unknown.
      */
-    protected String getMediaType() {
+    protected String mediaType() {
         return mediaType;
     }
 
@@ -74,7 +73,7 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
      *
      * @return source associated parser or {@code null} if unknown.
      */
-    protected ConfigParser getParser() {
+    protected ConfigParser parser() {
         return parser;
     }
 
@@ -95,13 +94,12 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
      * @throws ConfigParserException in case of problem to parse configuration from the source
      */
     private ObjectNode parse(ConfigContext context, ConfigParser.Content<S> content) throws ConfigParserException {
-        return OptionalHelper.from(Optional.ofNullable(getParser()))
-                .or(() -> context.findParser(Optional.ofNullable(content.getMediaType())
+        return Optional.ofNullable(parser())
+                .or(() -> context.findParser(Optional.ofNullable(content.mediaType())
                                                      .orElseThrow(() -> new ConfigException("Unknown media type."))))
-                .asOptional()
                 .map(parser -> parser.parse(content))
                 .orElseThrow(() -> new ConfigException("Cannot find suitable parser for '"
-                                                               + content.getMediaType() + "' media type."));
+                                                               + content.mediaType() + "' media type."));
     }
 
     /**
@@ -127,10 +125,11 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
      *
      * @param <B> type of Builder implementation
      * @param <T> type of key source attributes (target) used to construct polling strategy from
+     * @param <S> type of the config source to be built
      */
-    public abstract static class Builder<B extends Builder<B, T>, T> extends AbstractConfigSource.Builder<B, T> {
+    public abstract static class Builder<B extends Builder<B, T, S>, T, S extends AbstractMpSource<?>>
+            extends AbstractConfigSource.Builder<B, T, S> {
         private static final String MEDIA_TYPE_KEY = "media-type";
-        private final B thisBuilder;
         private String mediaType;
         private ConfigParser parser;
 
@@ -141,8 +140,6 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
          */
         protected Builder(Class<T> targetType) {
             super(targetType);
-
-            thisBuilder = (B) this;
         }
 
         /**
@@ -151,16 +148,17 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
          * <li>{@code media-type} - type {@code String}, see {@link #mediaType(String)}</li>
          * </ul>
          *
-         * @param metaConfig configuration properties used to initialize a builder instance.
+         * @param metaConfig configuration properties used to configure a builder instance.
          * @return modified builder instance
          */
         @Override
-        protected B init(Config metaConfig) {
+        public B config(Config metaConfig) {
             //media-type
-            metaConfig.get(MEDIA_TYPE_KEY).asOptionalString()
+            metaConfig.get(MEDIA_TYPE_KEY)
+                    .asString()
                     .ifPresent(this::mediaType);
 
-            return super.init(metaConfig);
+            return super.config(metaConfig);
         }
 
         /**
@@ -172,7 +170,7 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
         public B mediaType(String mediaType) {
             this.mediaType = mediaType;
 
-            return thisBuilder;
+            return thisBuilder();
         }
 
         /**
@@ -186,7 +184,7 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
         public B parser(ConfigParser parser) {
             this.parser = parser;
 
-            return thisBuilder;
+            return thisBuilder();
         }
 
         /**
@@ -194,7 +192,7 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
          *
          * @return media type property.
          */
-        protected String getMediaType() {
+        protected String mediaType() {
             return mediaType;
         }
 
@@ -203,7 +201,7 @@ public abstract class AbstractParsableConfigSource<S> extends AbstractConfigSour
          *
          * @return parser property.
          */
-        protected ConfigParser getParser() {
+        protected ConfigParser parser() {
             return parser;
         }
 

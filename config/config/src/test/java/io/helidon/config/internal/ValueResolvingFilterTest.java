@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,27 @@
 
 package io.helidon.config.internal;
 
-import io.helidon.common.CollectionsHelper;
-import io.helidon.config.Config;
-import io.helidon.config.ConfigException;
-import io.helidon.config.ConfigFilters;
-import io.helidon.config.ConfigSources;
-import io.helidon.config.MissingValueException;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.helidon.config.Config;
+import io.helidon.config.ConfigException;
+import io.helidon.config.ConfigFilters;
+import io.helidon.config.ConfigSources;
+import io.helidon.config.MissingValueException;
+
+import org.junit.jupiter.api.Test;
+
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link ValueResolvingFilter}.
@@ -42,9 +45,9 @@ public class ValueResolvingFilterTest {
 
     @Test
     public void testValueResolving() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "message", "${greeting} ${name}!",
                                 "greeting", "Hallo",
                                 "name", "Joachim"
@@ -55,14 +58,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("message").asString(), is("Hallo Joachim!"));
+        assertThat(config.get("message").asString().get(), is("Hallo Joachim!"));
     }
 
     @Test
     public void testValueResolvingDottedReference() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "message", "${greeting.german} ${name}!",
                                 "greeting.german", "Hallo",
                                 "name", "Joachim"
@@ -73,14 +76,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("message").asString(), is("Hallo Joachim!"));
+        assertThat(config.get("message").asString().get(), is("Hallo Joachim!"));
     }
 
     @Test
     public void testValueResolvingTransitive() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "message", "${template}",
                                 "template", "${greeting} ${name}!",
                                 "name", "Joachim",
@@ -92,14 +95,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("message").asString(), is("Hallo Joachim!"));
+        assertThat(config.get("message").asString().get(), is("Hallo Joachim!"));
     }
 
     @Test
     public void testValueResolvingBackslashed() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "message", "${template}",
                                 "template", "${greeting} \\${name}!",
                                 "name", "Joachim",
@@ -111,14 +114,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("message").asString(), is("Hallo ${name}!"));
+        assertThat(config.get("message").asString().get(), is("Hallo ${name}!"));
     }
 
     @Test
     public void testValueResolvingBackslashIgnored() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "message", "${greeting} \\ ${name}!",
                                 "name", "Joachim",
                                 "greeting", "Hallo"
@@ -129,14 +132,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("message").asString(), is("Hallo \\ Joachim!"));
+        assertThat(config.get("message").asString().get(), is("Hallo \\ Joachim!"));
     }
 
     @Test
     public void testValueResolvingBackslashIgnored2() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "message", "${template}",
                                 "template", "${greeting} \\ ${name}!",
                                 "name", "Joachim",
@@ -148,7 +151,7 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("message").asString(), is("Hallo \\ Joachim!"));
+        assertThat(config.get("message").asString().get(), is("Hallo \\ Joachim!"));
     }
 
     private static class LoopTestResult {
@@ -164,9 +167,9 @@ public class ValueResolvingFilterTest {
         final FutureTask<LoopTestResult> shouldNotRecurse =
             new FutureTask<LoopTestResult> ( () -> {
                 LoopTestResult result = new LoopTestResult();
-                Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+                Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "message", "There ${template}",
                                 "template", "and back again ${message}"
                         )))
@@ -178,7 +181,7 @@ public class ValueResolvingFilterTest {
 
                 try {
                     // The following should trigger the exception.
-                    result.message = config.get("message").asString();
+                    result.message = config.get("message").asString().get();
                 } catch (IllegalStateException ex) {
                     // We expect this.
                     result.ex = ex;
@@ -190,18 +193,18 @@ public class ValueResolvingFilterTest {
         // the config.get from timing out and should throw an exception instead.
         shouldNotRecurse.run();
         LoopTestResult result = shouldNotRecurse.get(2, TimeUnit.SECONDS);
-        Assertions.assertNull(result.message);
-        Assertions.assertNotNull(result.ex);
-        assertTrue(result.ex.getMessage().startsWith("Recursive update"));
+        assertThat(result.message, nullValue());
+        assertThat(result.ex, notNullValue());
+        assertThat(result.ex.getMessage(), startsWith("Recursive update"));
 
 
     }
 
     @Test
     public void testValueResolvingMissingReferenceIgnored() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "wrong", "${missing}"
                         )))
                 .addFilter(ConfigFilters.valueResolving())
@@ -210,14 +213,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("wrong").asString(), is("${missing}"));
+        assertThat(config.get("wrong").asString().get(), is("${missing}"));
     }
 
     @Test
     public void testValueResolvingMissingReferenceNoFilter() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "wrong", "${missing}"
                         )))
                 .disableEnvironmentVariablesSource()
@@ -225,14 +228,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("wrong").asString(), is("${missing}"));
+        assertThat(config.get("wrong").asString().get(), is("${missing}"));
     }
 
     @Test
     public void testValueResolvingMissingReferenceFails() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "wrong", "${missing}"
                         )))
                 .addFilter(ConfigFilters.valueResolving()
@@ -244,17 +247,17 @@ public class ValueResolvingFilterTest {
                 .build();
 
         ConfigException ex = assertThrows(ConfigException.class, () -> {
-            config.get("wrong").asString();
+            config.get("wrong").asString().get();
         });
-        assertTrue(ex.getMessage().startsWith(String.format(ValueResolvingFilter.MISSING_REFERENCE_ERROR, "wrong")));
-        assertTrue(instanceOf(MissingValueException.class).matches(ex.getCause()));
+        assertThat(ex.getMessage(), startsWith(String.format(ValueResolvingFilter.MISSING_REFERENCE_ERROR, "wrong")));
+        assertThat(ex.getCause(), instanceOf(MissingValueException.class));
     }
 
     @Test
     public void testValueResolvingMissingReferenceOKViaNoArgsCtor() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "wrong", "${missing}"
                         )))
                 .addFilter(new ValueResolvingFilter())
@@ -263,14 +266,14 @@ public class ValueResolvingFilterTest {
                 .disableFilterServices()
                 .build();
 
-        assertThat(config.get("wrong").asString(), is("${missing}"));
+        assertThat(config.get("wrong").asString().get(), is("${missing}"));
     }
 
     @Test
     public void testValueResolvingMissingReferenceFailsViaNoArgsCtor() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "wrong", "${missing}"
                         )))
                 .addFilter(ConfigFilters.valueResolving().failOnMissingReference(true).build())
@@ -280,17 +283,17 @@ public class ValueResolvingFilterTest {
                 .build();
 
         ConfigException ex = assertThrows(ConfigException.class, () -> {
-            config.get("wrong").asString();
+            config.get("wrong").asString().get();
         });
-        assertTrue(ex.getMessage().startsWith(String.format(ValueResolvingFilter.MISSING_REFERENCE_ERROR, "wrong")));
-        assertTrue(instanceOf(MissingValueException.class).matches(ex.getCause()));
+        assertThat(ex.getMessage(), startsWith(String.format(ValueResolvingFilter.MISSING_REFERENCE_ERROR, "wrong")));
+        assertThat(ex.getCause(), instanceOf(MissingValueException.class));
     }
 
     @Test
     public void testValueResolvingMissingReferenceFailsViaServiceLoader() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "wrong", "${missing}",
                                 ConfigFilters.ValueResolvingBuilder.FAIL_ON_MISSING_REFERENCE_KEY_NAME, "true"
                         )))
@@ -299,31 +302,31 @@ public class ValueResolvingFilterTest {
                 .build();
 
         ConfigException ex = assertThrows(ConfigException.class, () -> {
-            config.get("wrong").asString();
+            config.get("wrong").asString().get();
         });
-        assertTrue(ex.getMessage().startsWith(String.format(ValueResolvingFilter.MISSING_REFERENCE_ERROR, "wrong")));
-        assertTrue(instanceOf(MissingValueException.class).matches(ex.getCause()));
+        assertThat(ex.getMessage(), startsWith(String.format(ValueResolvingFilter.MISSING_REFERENCE_ERROR, "wrong")));
+        assertThat(ex.getCause(), instanceOf(MissingValueException.class));
     }
 
     @Test
     public void testValueResolvingMissingReferenceOKViaServiceLoader() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "wrong", "${missing}"
                         )))
                 .disableEnvironmentVariablesSource()
                 .disableSystemPropertiesSource()
                 .build();
 
-        assertThat(config.get("wrong").asString(), is("${missing}"));
+        assertThat(config.get("wrong").asString().get(), is("${missing}"));
     }
 
     @Test
     public void testValueResolvingSatisfiedReferenceViaServiceLoader() {
-        Config config = Config.withSources(
-                ConfigSources.from(
-                        CollectionsHelper.mapOf(
+        Config config = Config.builder(
+                ConfigSources.create(
+                        Map.of(
                                 "correct", "${refc}",
                                 "refc", "answer"
                         )))
@@ -331,6 +334,6 @@ public class ValueResolvingFilterTest {
                 .disableSystemPropertiesSource()
                 .build();
 
-        assertThat(config.get("correct").asString(), is("answer"));
+        assertThat(config.get("correct").asString().get(), is("answer"));
     }
 }

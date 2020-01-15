@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,23 +17,24 @@
 package io.helidon.config.spi;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import io.helidon.common.CollectionsHelper;
-import io.helidon.common.reactive.Flow;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigException;
 import io.helidon.config.ConfigSources;
 import io.helidon.config.PollingStrategies;
 
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link AbstractSource}.
@@ -129,28 +130,31 @@ public class AbstractSourceTest {
 
     @Test
     public void testInitAll() {
-        TestingSource.TestingBuilder builder = TestingSource.builder().init(Config.from(ConfigSources.from(
-                CollectionsHelper.mapOf("optional", "true",
-                       "polling-strategy.class", TestingPollingStrategy.class.getName(),
-                       "retry-policy.class", TestingRetryPolicy.class.getName()
-                ))));
+        TestingSource.TestingBuilder builder = TestingSource.builder().config(
+                Config.builder(ConfigSources.create(
+                        Map.of("optional", "true")))
+                        .addMapper(TestingRetryPolicy.class, config -> new TestingRetryPolicy())
+                        .addMapper(TestingPollingStrategy.class, config -> new TestingPollingStrategy())
+                        .build()
+        ).pollingStrategy(TestingPollingStrategy::new)
+                .retryPolicy(new TestingRetryPolicy());
 
         //optional
         assertThat(builder.isMandatory(), is(false));
         //polling-strategy
-        assertThat(builder.getPollingStrategy(), is(instanceOf(TestingPollingStrategy.class)));
+        assertThat(builder.pollingStrategy(), is(instanceOf(TestingPollingStrategy.class)));
         //retry-policy
-        assertThat(builder.getRetryPolicy(), is(instanceOf(TestingRetryPolicy.class)));
+        assertThat(builder.retryPolicy(), is(instanceOf(TestingRetryPolicy.class)));
     }
 
     @Test
     public void testInitNothing() {
-        TestingSource.TestingBuilder builder = TestingSource.builder().init(Config.empty());
+        TestingSource.TestingBuilder builder = TestingSource.builder().config(Config.empty());
 
         //optional
         assertThat(builder.isMandatory(), is(true));
         //polling-strategy
-        assertThat(builder.getPollingStrategy(), is(PollingStrategies.nop()));
+        assertThat(builder.pollingStrategy(), is(PollingStrategies.nop()));
     }
 
     private static class TestingSource extends AbstractSource<String, Instant> {

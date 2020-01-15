@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Flow;
 
-import io.helidon.common.OptionalHelper;
-import io.helidon.common.reactive.Flow;
 import io.helidon.common.reactive.SubmissionPublisher;
-import io.helidon.security.provider.ProviderForTesting;
+import io.helidon.security.providers.ProviderForTesting;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,7 +64,7 @@ public class EntityHandlingTest {
     public void reactiveTest() throws Throwable {
         CountDownLatch cdl = new CountDownLatch(1);
 
-        context.setEnv(context.getEnv()
+        context.env(context.env()
                                .derive()
                                .method("POST")
                                .path("/post"));
@@ -77,9 +76,9 @@ public class EntityHandlingTest {
 
         AuthenticationClientImpl authClient = (AuthenticationClientImpl) context.atnClientBuilder().build();
 
-        Optional<Entity> requestMessage = request.getRequestEntity();
+        Optional<Entity> requestMessage = request.requestEntity();
 
-        OptionalHelper.from(requestMessage).ifPresentOrElse(message -> message.filter(byteBufferPublisher -> {
+        requestMessage.ifPresentOrElse(message -> message.filter(byteBufferPublisher -> {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             SubmissionPublisher<ByteBuffer> bPublisher = new SubmissionPublisher<>();
 
@@ -113,7 +112,7 @@ public class EntityHandlingTest {
             return bPublisher;
         }), () -> fail("Request message should have been present"));
 
-        request.getResponseEntity().ifPresent(message -> fail("Response message should not be present"));
+        request.responseEntity().ifPresent(message -> fail("Response message should not be present"));
 
         publisher.submit(ByteBuffer.wrap(REQUEST_BYTES.getBytes()));
         publisher.close();

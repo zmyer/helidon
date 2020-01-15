@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,14 @@ package io.helidon.config.internal;
 import io.helidon.config.Config;
 
 import org.hamcrest.Matcher;
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
-import org.junit.jupiter.api.Test;
 /**
  * Tests {@link ConfigKeyImpl}.
  */
@@ -33,9 +34,9 @@ public class ConfigKeyImplTest {
 
     @Test
     public void testConfigKeyOf() {
-        assertThatKey((ConfigKeyImpl) Config.Key.of(""), true, nullValue(), "", "");
-        assertThatKey((ConfigKeyImpl) Config.Key.of("aaa"), false, not(nullValue()), "aaa", "aaa");
-        assertThatKey((ConfigKeyImpl) Config.Key.of("aaa.bbb.ccc"), false, not(nullValue()), "ccc", "aaa.bbb.ccc");
+        assertThatKey((ConfigKeyImpl) Config.Key.create(""), true, nullValue(), "", "");
+        assertThatKey((ConfigKeyImpl) Config.Key.create("aaa"), false, not(nullValue()), "aaa", "aaa");
+        assertThatKey((ConfigKeyImpl) Config.Key.create("aaa.bbb.ccc"), false, not(nullValue()), "ccc", "aaa.bbb.ccc");
     }
 
     @Test

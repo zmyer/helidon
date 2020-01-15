@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package io.helidon.config;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -39,7 +38,7 @@ public class ConfigEmptyTest {
 
     @Test
     public void testChildren() {
-        assertThat(Config.empty().asNodeList().size(), is(0));
+        assertThat(Config.empty().asNodeList().get().size(), is(0));
     }
 
     @Test
@@ -52,51 +51,49 @@ public class ConfigEmptyTest {
         assertThrows(MissingValueException.class, () -> {
             //separate lines to see the line that fails
             Config empty = Config.empty();
-            empty.asString();
+            empty.asString().get();
         });
     }
 
     @Test
     public void testAsStringDefault() {
-        assertThat(Config.empty().asString("default"), is("default"));
+        assertThat(Config.empty().asString().orElse("default"), is("default"));
     }
 
     @Test
     public void testAsInt() {
         assertThrows(MissingValueException.class, () -> {
-            Config.empty().asInt();
+            Config.empty().asInt().get();
         });
     }
 
     @Test
     public void testAsIntDefault() {
-        assertThat(Config.empty().asInt(5), is(5));
+        assertThat(Config.empty().asInt().orElse(5), is(5));
     }
 
     @Test
     public void testAsStringList() {
-        assertThat(Config.empty().asStringList(), is(empty()));
+        assertThat(Config.empty().asList(String.class).get(), is(empty()));
     }
 
     @Test
     public void testAsStringListDefault() {
-        List<String> list = new ArrayList<String>() {{
-            add("record");
-        }};
-        assertThat(Config.empty().asStringList(list), is(empty()));
+        List<String> list = List.of("record");
+
+        assertThat(Config.empty().asList(String.class).orElse(list), is(empty()));
     }
 
     @Test
     public void testAsIntList() {
-        assertThat(Config.empty().asList(Integer.class), is(empty()));
+        assertThat(Config.empty().asList(Integer.class).get(), is(empty()));
     }
 
     @Test
     public void testAsIntListDefault() {
-        List<Integer> list = new ArrayList<Integer>() {{
-            add(5);
-        }};
-        assertThat(Config.empty().asList(Integer.class, list), is(empty()));
+        List<Integer> list = List.of(5);
+
+        assertThat(Config.empty().asList(Integer.class).orElse(list), is(empty()));
     }
 
     @Test
@@ -107,23 +104,23 @@ public class ConfigEmptyTest {
     @Test
     public void testMap() {
         assertThrows(MissingValueException.class, () -> {
-            Config.empty().map(ConfigMappers::toBigInteger);
+            Config.empty().asString().as(ConfigMappers::toBigInteger).get();
         });
     }
 
     @Test
     public void testKeyViaSupplier() {
-        assertThat(Config.empty().nodeSupplier().get().get().get("one.two").key().toString(), is("one.two"));
+        assertThat(Config.empty().asNode().optionalSupplier().get().get().get("one.two").key().toString(), is("one.two"));
     }
 
     @Test
     public void testChildrenSupplier() {
-        assertThat(Config.empty().asNodeListSupplier().get().size(), is(0));
+        assertThat(Config.empty().asNodeList().supplier().get().size(), is(0));
     }
 
     @Test
     public void testTraverseSupplier() {
-        assertThat(Config.empty().nodeSupplier().get().get().traverse().count(), is(0L));
+        assertThat(Config.empty().asNode().optionalSupplier().get().get().traverse().count(), is(0L));
     }
 
     @Test
@@ -131,64 +128,85 @@ public class ConfigEmptyTest {
         assertThrows(MissingValueException.class, () -> {
             // separate lines to see which statement fails
             Config empty = Config.empty();
-            Supplier<String> supp = empty.asStringSupplier();
+            Supplier<String> supp = empty.asString().supplier();
             supp.get();
         });
     }
 
     @Test
     public void testAsStringDefaultSupplier() {
-        assertThat(Config.empty().asStringSupplier("default").get(), is("default"));
+        assertThat(Config.empty()
+                           .asString()
+                           .supplier("default")
+                           .get(),
+                   is("default"));
     }
 
     @Test
     public void testAsIntSupplier() {
         assertThrows(MissingValueException.class, () -> {
-            Config.empty().asIntSupplier().get();
+            Config.empty().asInt().supplier().get();
         });
     }
 
     @Test
     public void testAsIntDefaultSupplier() {
-        assertThat(Config.empty().asIntSupplier(5).get(), is(5));
+        assertThat(Config.empty()
+                           .asInt()
+                           .supplier(5)
+                           .get(),
+                   is(5));
     }
 
     @Test
     public void testAsStringListSupplier() {
-        assertThat(Config.empty().asStringListSupplier().get(), is(empty()));
+        assertThat(Config.empty()
+                           .asList(String.class)
+                           .supplier()
+                           .get(),
+                   is(empty()));
     }
 
     @Test
     public void testAsStringListDefaultSupplier() {
-        List<String> list = new ArrayList<String>() {{
-            add("record");
-        }};
-        assertThat(Config.empty().asStringListSupplier(list).get(), is(empty()));
+        List<String> list = List.of("record");
+
+        assertThat(Config.empty()
+                           .asList(String.class)
+                           .supplier(list)
+                           .get(),
+                   is(empty()));
     }
 
     @Test
     public void testAsIntListSupplier() {
-        assertThat(Config.empty().asListSupplier(Integer.class).get(), is(empty()));
+        assertThat(Config.empty()
+                           .asList(Integer.class)
+                           .supplier()
+                           .get(),
+                   is(empty()));
     }
 
     @Test
     public void testAsIntListDefaultSupplier() {
-        List<Integer> list = new ArrayList<Integer>() {{
-            add(5);
-        }};
-        assertThat(Config.empty().asListSupplier(Integer.class, list).get(), is(empty()));
+        List<Integer> list = List.of(5);
+
+        assertThat(Config.empty()
+                           .asList(Integer.class)
+                           .supplier(list)
+                           .get(),
+                   is(empty()));
     }
 
     @Test
     public void testTypeSupplier() {
-        assertThat(Config.empty().nodeSupplier().get().get().type(), is(Config.Type.OBJECT));
+        assertThat(Config.empty().asNode().optionalSupplier().get().get().type(), is(Config.Type.OBJECT));
     }
 
     @Test
     public void testMapSupplier() {
         assertThrows(MissingValueException.class, () -> {
-            Config.empty().mapSupplier(ConfigMappers::toBigInteger).get();
+            Config.empty().asString().as(ConfigMappers::toBigInteger).supplier().get();
         });
     }
-
 }

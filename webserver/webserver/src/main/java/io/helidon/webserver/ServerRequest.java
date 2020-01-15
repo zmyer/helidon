@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import io.helidon.common.http.HttpRequest;
 
 import io.opentracing.Span;
 import io.opentracing.SpanContext;
+import io.opentracing.Tracer;
 
 /**
  * Represents HTTP Request and provides WebServer related API.
@@ -135,7 +136,17 @@ public interface ServerRequest extends HttpRequest {
      * <p>
      * {@code SpanContext} is a tracing component from <a href="http://opentracing.io">opentracing.io</a> standard.
      *
-     * @return the related span context
+     * @return the related span context, may be null if not enabled
+     * @deprecated this method will have a different return type in next backward incompatible version
+     *  of Helidon. It will return {@code Optional<SpanContext>}. All methods that can return null will use
+     *  {@link java.util.Optional}
      */
     SpanContext spanContext();
+
+    /**
+     * Returns the {@link io.opentracing.Tracer} associated with {@link io.helidon.webserver.WebServer}.
+     *
+     * @return the tracer associated, or {@link io.opentracing.util.GlobalTracer#get()}
+     */
+    Tracer tracer();
 }

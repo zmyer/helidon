@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@ package io.helidon.webserver;
 
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
@@ -29,31 +32,37 @@ import java.util.Objects;
 import java.util.StringTokenizer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
-import io.helidon.common.CollectionsHelper;
 import io.helidon.common.http.ContextualRegistry;
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.http.Http;
+import io.helidon.common.http.MediaType;
 import io.helidon.common.http.Parameters;
 import io.helidon.common.http.Reader;
-import io.helidon.common.reactive.Flow;
-import io.helidon.webserver.spi.BareRequest;
+import io.helidon.media.common.ContentReaders;
+import io.helidon.tracing.config.SpanTracingConfig;
+import io.helidon.tracing.config.TracingConfigUtil;
 
 import io.opentracing.Span;
+import io.opentracing.SpanContext;
 import io.opentracing.Tracer;
 import io.opentracing.tag.Tags;
-
-import static io.helidon.webserver.StringContentReader.requestContentCharset;
 
 /**
  * The basic abstract implementation of {@link ServerRequest}.
  */
 abstract class Request implements ServerRequest {
+    private static final String TRACING_CONTENT_READ_NAME = "content-read";
+
+    /**
+     * The default charset to use in case that no charset or no mime-type is defined in the content type header.
+     */
+    static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
 
     private final BareRequest bareRequest;
     private final WebServer webServer;
@@ -65,15 +74,15 @@ abstract class Request implements ServerRequest {
     /**
      * Creates new instance.
      *
-     * @param req       bare request from HTTP SPI implementation.
+     * @param req bare request from HTTP SPI implementation.
      * @param webServer relevant server.
      */
     Request(BareRequest req, WebServer webServer) {
         this.bareRequest = req;
         this.webServer = webServer;
         this.context = ContextualRegistry.create(webServer.context());
-        this.queryParams = UriComponent.decodeQuery(req.getUri().getRawQuery(), true);
-        this.headers = new HashRequestHeaders(bareRequest.getHeaders());
+        this.queryParams = UriComponent.decodeQuery(req.uri().getRawQuery(), true);
+        this.headers = new HashRequestHeaders(bareRequest.headers());
         this.content = new Content();
     }
 
@@ -91,7 +100,19 @@ abstract class Request implements ServerRequest {
         this.content = new Content(request.content);
     }
 
-    protected abstract Tracer tracer();
+    /**
+     * Obtain the charset from the request.
+     *
+     * @param request the request to extract the charset from
+     * @return the charset or {@link #DEFAULT_CHARSET} if none found
+     */
+    static Charset contentCharset(ServerRequest request) {
+        return request.headers()
+                      .contentType()
+                      .flatMap(MediaType::charset)
+                      .map(Charset::forName)
+                      .orElse(DEFAULT_CHARSET);
+    }
 
     @Override
     public WebServer webServer() {
@@ -105,22 +126,22 @@ abstract class Request implements ServerRequest {
 
     @Override
     public Http.RequestMethod method() {
-        return bareRequest.getMethod();
+        return bareRequest.method();
     }
 
     @Override
     public Http.Version version() {
-        return bareRequest.getVersion();
+        return bareRequest.version();
     }
 
     @Override
     public URI uri() {
-        return bareRequest.getUri();
+        return bareRequest.uri();
     }
 
     @Override
     public String query() {
-        return bareRequest.getUri().getRawQuery();
+        return bareRequest.uri().getRawQuery();
     }
 
     @Override
@@ -130,27 +151,27 @@ abstract class Request implements ServerRequest {
 
     @Override
     public String fragment() {
-        return bareRequest.getUri().getFragment();
+        return bareRequest.uri().getFragment();
     }
 
     @Override
     public String localAddress() {
-        return bareRequest.getLocalAddress();
+        return bareRequest.localAddress();
     }
 
     @Override
     public int localPort() {
-        return bareRequest.getLocalPort();
+        return bareRequest.localPort();
     }
 
     @Override
     public String remoteAddress() {
-        return bareRequest.getRemoteAddress();
+        return bareRequest.remoteAddress();
     }
 
     @Override
     public int remotePort() {
-        return bareRequest.getRemotePort();
+        return bareRequest.remotePort();
     }
 
     @Override
@@ -209,7 +230,7 @@ abstract class Request implements ServerRequest {
 
         private Content() {
             this.originalPublisher = bareRequest.bodyPublisher();
-            this.readers = new LinkedList<>();
+            this.readers = appendDefaultReaders(new LinkedList<>());
             this.filters = new ArrayList<>();
             this.readersLock = new ReentrantReadWriteLock();
             this.filtersLock = new ReentrantReadWriteLock();
@@ -221,6 +242,13 @@ abstract class Request implements ServerRequest {
             this.filters = orig.filters;
             this.readersLock = orig.readersLock;
             this.filtersLock = orig.filtersLock;
+        }
+
+        private Deque<InternalReader<?>> appendDefaultReaders(final Deque<InternalReader<?>> readers) {
+            readers.addLast(reader(String.class, stringContentReader()));
+            readers.addLast(reader(byte[].class, ContentReaders.byteArrayReader()));
+            readers.addLast(reader(InputStream.class, ContentReaders.inputStreamReader()));
+            return readers;
         }
 
         @Override
@@ -255,70 +283,93 @@ abstract class Request implements ServerRequest {
         }
 
         private <T> InternalReader<T> reader(Class<T> clazz, Reader<T> reader) {
-            return new InternalReader<>(aClass -> aClass.isAssignableFrom(clazz), reader);
+            return new InternalReader<>(aClass -> clazz.isAssignableFrom(aClass), reader);
         }
-
 
         @Override
         @SuppressWarnings("unchecked")
-        public <T> CompletionStage<T> as(Class<T> type) {
+        public <T> CompletionStage<T> as(final Class<T> type) {
             Span readSpan = createReadSpan(type);
             CompletionStage<T> result;
             try {
                 readersLock.readLock().lock();
-
-                 result = readersWithDefaults()
-                        .filter(reader -> reader.accept(type))
-                        .findFirst()
-                        // in this context, the cast is absurd, although it's needed;
-                        // one can create a predicate matching an incompatible class
-                        .map(reader -> (CompletionStage<? extends T>) (((Reader<T>) reader).apply(chainPublishers(), type)))
-                        .orElse(failedFuture(new IllegalArgumentException("No reader found for class: " + type)));
+                result = (CompletionStage<T>) readerFor(type).apply(chainPublishers(), type);
+            } catch (IllegalArgumentException e) {
+                result = failedFuture(e);
             } catch (Exception e) {
                 result = failedFuture(new IllegalArgumentException("Transformation failed!", e));
             } finally {
                 readersLock.readLock().unlock();
             }
             // Close span
-            result.thenRun(readSpan::finish)
-                    .exceptionally(t -> {
-                        finishSpanWithError(readSpan, t);
-                        return null;
-                    });
+            if (null != readSpan) {
+                result.thenRun(readSpan::finish)
+                        .exceptionally(t -> {
+                            finishSpanWithError(readSpan, t);
+                            return null;
+                        });
+            }
             return result;
         }
 
         private void finishSpanWithError(Span readSpan, Throwable t) {
+            if (null == readSpan) {
+                // tracing of reads disabled
+                return;
+            }
             Tags.ERROR.set(readSpan, Boolean.TRUE);
-            readSpan.log(CollectionsHelper.mapOf("event", "error",
-                                "error.kind", "Exception",
-                                "error.object", t,
-                                "message", t.toString()));
+            readSpan.log(Map.of("event", "error",
+                                                 "error.kind", "Exception",
+                                                 "error.object", t,
+                                                 "message", t.toString()));
             readSpan.finish();
         }
 
         private <T> Span createReadSpan(Class<T> type) {
-            Tracer.SpanBuilder spanBuilder = tracer().buildSpan("content-read");
-            if (span() != null) {
-                spanBuilder.asChildOf(span());
+            // only create this span if we have a parent span
+            SpanContext parentSpan = spanContext();
+            if (null == parentSpan) {
+                return null;
             }
-            if (type != null) {
-                spanBuilder.withTag("requested.type", type.getName());
+
+            SpanTracingConfig spanConfig = TracingConfigUtil
+                    .spanConfig(NettyWebServer.TRACING_COMPONENT,
+                                TRACING_CONTENT_READ_NAME,
+                                context());
+
+            String spanName = spanConfig.newName().orElse(TRACING_CONTENT_READ_NAME);
+
+            if (spanConfig.enabled()) {
+                // only create a real span if enabled
+                Tracer.SpanBuilder spanBuilder = tracer().buildSpan(spanName);
+                spanBuilder.asChildOf(parentSpan);
+
+                if (type != null) {
+                    spanBuilder.withTag("requested.type", type.getName());
+                }
+                return spanBuilder.start();
+            } else {
+                return null;
             }
-            return spanBuilder.start();
         }
 
-        private Stream<InternalReader<?>> readersWithDefaults() {
-            return Stream.concat(readers.stream(), Stream.of(
-                    reader(String.class, stringContentReader()),
-                    reader(byte[].class, ContentReaders.byteArrayReader()),
-                    reader(InputStream.class, ContentReaders.inputStreamReader())));
+        @SuppressWarnings("unchecked")
+        private <T> Reader<T> readerFor(final Class<T> type) {
+            return (Reader<T>) readers.stream()
+                                      .filter(reader -> reader.accept(type))
+                                      .findFirst()
+                                      .orElseThrow(() -> new IllegalArgumentException("No reader found for class: " + type));
         }
 
-        private StringContentReader stringContentReader() {
-            String charset = requestContentCharset(Request.this);
-            StringContentReader reader = ContentReaders.cachedStringReader(charset);
-            return reader != null ? reader : new StringContentReader(charset);
+        private Reader<String> stringContentReader() {
+            try {
+                Charset charset = contentCharset(Request.this);
+                return ContentReaders.stringReader(charset);
+            } catch (final UnsupportedCharsetException e) {
+                return (publisher, clazz) -> {
+                    throw e;
+                };
+            }
         }
 
         @Override
@@ -350,7 +401,10 @@ abstract class Request implements ServerRequest {
                         try {
                             subscriber.onComplete();
                         } finally {
-                            readSpan.finish();
+                            if (null != readSpan) {
+                                // tracing disabled
+                                readSpan.finish();
+                            }
                         }
                     }
                 });
@@ -379,6 +433,7 @@ abstract class Request implements ServerRequest {
     static class Path implements ServerRequest.Path {
 
         private final String path;
+        private final String rawPath;
         private final Map<String, String> params;
         private final Path absolutePath;
         private List<String> segments;
@@ -386,12 +441,14 @@ abstract class Request implements ServerRequest {
         /**
          * Creates new instance.
          *
-         * @param path         actual relative URI path.
-         * @param params       resolved path parameters.
+         * @param path actual relative URI path.
+         * @param rawPath actual relative URI path without any decoding.
+         * @param params resolved path parameters.
          * @param absolutePath absolute path.
          */
-        Path(String path, Map<String, String> params, Path absolutePath) {
+        Path(String path, String rawPath, Map<String, String> params, Path absolutePath) {
             this.path = path;
+            this.rawPath = rawPath;
             this.params = params == null ? Collections.emptyMap() : params;
             this.absolutePath = absolutePath;
         }
@@ -421,19 +478,28 @@ abstract class Request implements ServerRequest {
         }
 
         @Override
+        public String toRawString() {
+            return rawPath;
+        }
+
+        @Override
         public Path absolute() {
             return absolutePath == null ? this : absolutePath;
         }
 
         static Path create(Path contextual, String path, Map<String, String> params) {
+            return create(contextual, path, path, params);
+        }
+
+        static Path create(Path contextual, String path, String rawPath, Map<String, String> params) {
             if (contextual == null) {
-                return new Path(path, params, null);
+                return new Path(path, rawPath, params, null);
             } else {
-                return contextual.createSubpath(path, params);
+                return contextual.createSubpath(path, rawPath, params);
             }
         }
 
-        Path createSubpath(String path, Map<String, String> params) {
+        Path createSubpath(String path, String rawPath, Map<String, String> params) {
             if (params == null) {
                 params = Collections.emptyMap();
             }
@@ -441,13 +507,13 @@ abstract class Request implements ServerRequest {
                 HashMap<String, String> map = new HashMap<>(this.params.size() + params.size());
                 map.putAll(this.params);
                 map.putAll(params);
-                return new Path(path, params, new Path(this.path, map, null));
+                return new Path(path, rawPath, params, new Path(this.path, this.rawPath, map, null));
             } else {
                 HashMap<String, String> map = new HashMap<>(this.params.size() + params.size() + absolutePath.params.size());
                 map.putAll(absolutePath.params);
                 map.putAll(this.params);
                 map.putAll(params);
-                return new Path(path, params, new Path(absolutePath.path, map, null));
+                return new Path(path, rawPath, params, new Path(absolutePath.path, absolutePath.rawPath, map, null));
             }
         }
     }

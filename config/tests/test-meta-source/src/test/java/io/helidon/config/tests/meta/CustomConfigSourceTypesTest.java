@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,19 @@ package io.helidon.config.tests.meta;
 
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
+import io.helidon.config.ConfigValues;
+import io.helidon.config.MetaConfig;
 import io.helidon.config.spi.ConfigNode.ObjectNode;
 import io.helidon.config.spi.ConfigSource;
 import io.helidon.config.tests.module.meta1.MyConfigSource1;
 import io.helidon.config.tests.module.meta2.MyConfigSource2;
-import static org.hamcrest.MatcherAssert.assertThat;
 
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests custom config source type registration.
@@ -37,7 +41,7 @@ import org.junit.jupiter.api.Test;
 public class CustomConfigSourceTypesTest {
 
     private void testCustomType(String type, Class<? extends ConfigSource> sourceClass) {
-        Config metaConfig = justFrom(ConfigSources.from(
+        Config metaConfig = justFrom(ConfigSources.create(
                 ObjectNode.builder()
                         .addValue("type", type)
                         .addObject("properties", ObjectNode.builder()
@@ -47,14 +51,14 @@ public class CustomConfigSourceTypesTest {
                                 .build())
                         .build()));
 
-        ConfigSource source = metaConfig.as(ConfigSource.class);
+        ConfigSource source = metaConfig.as(MetaConfig::configSource).get();
 
         assertThat(source, is(instanceOf(sourceClass)));
 
         Config config = justFrom(source);
 
-        assertThat(config.get("key1").asInt(), is(23));
-        assertThat(config.get("enabled").asBoolean(), is(true));
+        assertThat(config.get("key1").asInt(), is(ConfigValues.simpleValue(23)));
+        assertThat(config.get("enabled").asBoolean(), is(ConfigValues.simpleValue(true)));
     }
 
     @Test
@@ -62,7 +66,12 @@ public class CustomConfigSourceTypesTest {
         testCustomType("meta1class", MyConfigSource1.class);
     }
 
+    // this test is intentionaly disabled and the feature no longer works
+    // this is too much magic - use the builder internally in config source,
+    // rather than having a public builder and hidden source
+    // expecting ConfigSourceImpl.create(Config)
     @Test
+    @Disabled
     public void testCustomTypeBuilder1() {
         testCustomType("meta1builder", MyConfigSource1.class);
     }
@@ -72,13 +81,18 @@ public class CustomConfigSourceTypesTest {
         testCustomType("meta2class", MyConfigSource2.class);
     }
 
+    // this test is intentionaly disabled and the feature no longer works
+    // this is too much magic - use the builder internally in config source,
+    // rather than having a public builder and hidden source
+    // expecting ConfigSourceImpl.create(Config)
+    @Disabled
     @Test
     public void testCustomTypeBuilder2() {
         testCustomType("meta2builder", MyConfigSource2.class);
     }
 
     static Config justFrom(ConfigSource source) {
-        return Config.withSources(source)
+        return Config.builder(source)
                 .disableEnvironmentVariablesSource()
                 .disableSystemPropertiesSource()
                 .build();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,19 +18,28 @@ package io.helidon.common.configurable;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Base64;
 import java.util.Objects;
+import java.util.Optional;
+
+import io.helidon.config.Config;
 
 /**
  * Utilities to move private static methods from interface,
  * as javadoc fails when using source 8.
  */
 final class ResourceUtil {
+    private static final int DEFAULT_PROXY_PORT = 80;
+
     private ResourceUtil() {
     }
+
     /**
      * Load resource from binary content from an input stream.
      *
@@ -54,7 +63,7 @@ final class ResourceUtil {
         try {
             return Files.newInputStream(fsPath);
         } catch (IOException e) {
-            throw new ResourceException("Resource on path: " + fsPath.toAbsolutePath() + " does not exist");
+            throw new ResourceException("Resource on path: " + fsPath.toAbsolutePath() + " does not exist", e);
         }
     }
 
@@ -81,7 +90,7 @@ final class ResourceUtil {
         try {
             return uri.toURL().openStream();
         } catch (IOException e) {
-            throw new ResourceException("Failed to open strem to uri: " + uri, e);
+            throw new ResourceException("Failed to open stream to uri: " + uri, e);
         }
     }
 
@@ -96,7 +105,51 @@ final class ResourceUtil {
         try {
             return uri.toURL().openConnection(proxy).getInputStream();
         } catch (IOException e) {
-            throw new ResourceException("Failed to open strem to uri: " + uri, e);
+            throw new ResourceException("Failed to open stream to uri: " + uri, e);
         }
+    }
+
+    static Optional<Resource> fromConfigPath(Config config, String keyPrefix) {
+        return config.get(keyPrefix + "-path")
+                .asString()
+                .map(Paths::get)
+                .map(Resource::create);
+    }
+
+    static Optional<Resource> fromConfigB64Content(Config config, String keyPrefix) {
+        return config.get(keyPrefix + "-content")
+                .asString()
+                .map(Base64.getDecoder()::decode)
+                .map(content -> Resource.create("config:" + keyPrefix + "-content-b64", content));
+    }
+
+    static Optional<Resource> fromConfigContent(Config config, String keyPrefix) {
+        return config.get(keyPrefix + "-content-plain")
+                .asString()
+                .map(content -> Resource.create("config:" + keyPrefix + "-content", content));
+    }
+
+    static Optional<Resource> fromConfigUrl(Config config, String keyPrefix) {
+        return config.get(keyPrefix + "-url")
+                .as(URI.class)
+                .map(uri -> config.get("proxy-host").asString()
+                        .map(proxyHost -> {
+                            if (config.get(keyPrefix + "-use-proxy").asBoolean().orElse(true)) {
+                                Proxy proxy = new Proxy(Proxy.Type.HTTP,
+                                                        new InetSocketAddress(proxyHost,
+                                                                              config.get("proxy-port").asInt().orElse(
+                                                                                      DEFAULT_PROXY_PORT)));
+                                return Resource.create(uri, proxy);
+                            } else {
+                                return Resource.create(uri);
+                            }
+                        })
+                        .orElseGet(() -> Resource.create(uri)));
+    }
+
+    static Optional<Resource> fromConfigResourcePath(Config config, String keyPrefix) {
+        return config.get(keyPrefix + "-resource-path")
+                .asString()
+                .map(Resource::create);
     }
 }

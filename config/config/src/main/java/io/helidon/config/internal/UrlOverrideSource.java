@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,12 @@ import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import io.helidon.config.Config;
 import io.helidon.config.ConfigException;
 import io.helidon.config.OverrideSources;
 import io.helidon.config.spi.AbstractOverrideSource;
 import io.helidon.config.spi.ConfigParser;
 import io.helidon.config.spi.ConfigSource;
-import io.helidon.config.spi.OverrideSource;
 import io.helidon.config.spi.PollingStrategy;
 
 /**
@@ -47,12 +47,33 @@ public class UrlOverrideSource extends AbstractOverrideSource<Instant> {
 
     private static final String GET_METHOD = "GET";
     private static final String HEAD_METHOD = "HEAD";
+    private static final String URL_KEY = "url";
 
     private final URL url;
 
-    UrlOverrideSource(UrlBuilder builder, URL url) {
+    UrlOverrideSource(UrlBuilder builder) {
         super(builder);
-        this.url = url;
+
+        this.url = builder.url;
+    }
+
+    /**
+     * Create a new URL override source from meta configuration.
+     *
+     * @param metaConfig meta configuration containing at least the {@key url} key
+     * @return a new URL override source
+     */
+    public static UrlOverrideSource create(Config metaConfig) {
+        return builder().config(metaConfig).build();
+    }
+
+    /**
+     * Create a new fluent API builder to create URL override source.
+     *
+     * @return a new builder
+     */
+    public static UrlBuilder builder() {
+        return new UrlBuilder();
     }
 
     @Override
@@ -73,7 +94,7 @@ public class UrlOverrideSource extends AbstractOverrideSource<Instant> {
             Reader reader = new InputStreamReader(connection.getInputStream(),
                                                   ConfigUtils.getContentCharset(connection.getContentEncoding()));
 
-            return new Data<>(Optional.of(OverrideData.from(reader)), Optional.of(timestamp));
+            return new Data<>(Optional.of(OverrideData.create(reader)), Optional.of(timestamp));
         } catch (ConfigException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -127,19 +148,30 @@ public class UrlOverrideSource extends AbstractOverrideSource<Instant> {
 
         /**
          * Initialize builder.
-         *
-         * @param url configuration url
          */
-        public UrlBuilder(URL url) {
+        private UrlBuilder() {
             super(URL.class);
+        }
 
-            Objects.requireNonNull(url, "url cannot be null");
-
+        /**
+         * Configure the URL that is source of this overrides.
+         *
+         * @param url url of the resource to load
+         * @return updated builder instance
+         */
+        public UrlBuilder url(URL url) {
             this.url = url;
+            return this;
         }
 
         @Override
-        protected URL getTarget() {
+        public UrlBuilder config(Config metaConfig) {
+            metaConfig.get(URL_KEY).as(URL.class).ifPresent(this::url);
+            return super.config(metaConfig);
+        }
+
+        @Override
+        protected URL target() {
             return url;
         }
 
@@ -150,12 +182,14 @@ public class UrlOverrideSource extends AbstractOverrideSource<Instant> {
          *
          * @return new instance of Url ConfigSource.
          */
-        public OverrideSource build() {
-            return new UrlOverrideSource(this, url);
+        public UrlOverrideSource build() {
+            Objects.requireNonNull(url, "url cannot be null");
+
+            return new UrlOverrideSource(this);
         }
 
-        PollingStrategy getPollingStrategyInternal() { //just for testing purposes
-            return super.getPollingStrategy();
+        PollingStrategy pollingStrategyInternal() { //just for testing purposes
+            return super.pollingStrategy();
         }
     }
 
